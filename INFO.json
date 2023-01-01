@@ -1,0 +1,7 @@
+{
+    "name": "Example Module",
+    "dir_name": "triggevent-example-module",
+    "icon_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/SMPTE_Color_Bars.svg/672px-SMPTE_Color_Bars.svg.png",
+    "webpage_url": "https://github.com/xpdota/triggevent-example-module",
+    "url_pattern": "https://raw.githubusercontent.com/xpdota/triggevent-example-module/gh-pages/master/%s"
+}

@@ -1,0 +1,93 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: Publish on gh-hosted runner
+
+on:
+  workflow_dispatch:
+  push:
+
+
+jobs:
+  build:
+
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+
+      # Check out the addon first
+      - uses: actions/checkout@v2
+        name: Check out the addon
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+          cache: maven
+
+      - name: Debug info
+        run: |
+          pwd
+          ls -la
+
+      - name: Setup Maven Action
+        uses: s4u/setup-maven-action@v1.4.0
+        with:
+          java-version: 17
+
+      - name: Debug info
+        run: |
+          pwd
+          ls -la
+
+      # Check out triggevent so we can install the deps into the local maven repo
+      - uses: actions/checkout@v2
+        name: Check out Triggevent
+        with:
+          repository: 'xpdota/event-trigger'
+          # You can set this to 'stable' to build against the stable release build, or 'master' to build against
+          # the bleeding edge.
+          ref: 'stable'
+          path: './triggevent-base'
+
+      - name: Build deps
+        uses: gabrielbb/xvfb-action@v1.6
+        with:
+          # Can't just use working-directory: https://github.com/GabrielBB/xvfb-action/issues/32
+          working-directory: triggevent-base
+          run: |
+            mvn -T8 clean install -DskipTests
+
+      - name: Build with Maven
+        uses: gabrielbb/xvfb-action@v1.6
+        with:
+          run: mvn -T4 clean package
+
+      - name: Copy release files
+        # Addons should not use any subdirs - they already get one dir to themselves which is managed by the updater
+        run: |
+          pushd target
+          mkdir -p publish_data/
+          mv *.jar publish_data/
+          cd publish_data
+          md5sum *.jar > manifest
+          cp ../../INFO.json ./INFO
+          popd
+# If you need dependencies, you will need use maven-dependency-plugin to copy the deps to a directory and
+# then add them to the above script. DO NOT copy everything like the main triggevent github actions do - you will
+# just end up overlapping a bunch of dependencies! Copy only what you need that is NOT incldued in the base install!
+#      - name: Docs with Maven
+#        run: mvn site
+#      - name: Copy docs
+#        run: |
+#          mv target/site/apidocs ./launcher/target/windows/publish_data/javadoc
+
+      - name: Deploy release files
+        uses: JamesIves/github-pages-deploy-action@4.1.7
+
+        with:
+          folder: ./target/publish_data
+          branch: gh-pages
+          target-folder: ${{ github.ref_name }}
