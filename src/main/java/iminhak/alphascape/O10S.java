@@ -7,6 +7,7 @@ import gg.xp.reevent.scan.AutoFeed;
 import gg.xp.reevent.scan.FilteredEventHandler;
 import gg.xp.reevent.scan.HandleEvents;
 import gg.xp.xivdata.data.duties.KnownDuty;
+import gg.xp.xivsupport.callouts.CalloutRepo;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
 import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
 import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 
+@CalloutRepo(name = "O10S", duty = KnownDuty.O10S)
 public class O10S extends AutoChildEventHandler implements FilteredEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(O10S.class);
@@ -34,7 +36,7 @@ public class O10S extends AutoChildEventHandler implements FilteredEventHandler 
 
     private final ModifiableCallout<AbilityCastStart> akhMorn = ModifiableCallout.durationBasedCall("Akh Morn", "Stack on {event.target}");
     private final ModifiableCallout<AbilityCastStart> tailEnd = ModifiableCallout.durationBasedCall("Tail End", "Buster on {event.target}");
-    private final ModifiableCallout<AbilityCastStart> thunderstorm = ModifiableCallout.durationBasedCall("Thunderstorm", "Sprad");
+    private final ModifiableCallout<AbilityCastStart> thunderstorm = ModifiableCallout.durationBasedCall("Thunderstorm", "Spread");
     private final ModifiableCallout<AbilityCastStart> northernCross = ModifiableCallout.durationBasedCall("Northern Cross", "Raidwide, thin ice"); //TODO: add thin ice icon
     private final ModifiableCallout<AbilityCastStart> akhRhai = ModifiableCallout.durationBasedCall("Akh Rhai: Other", "Move soon");
     private final ModifiableCallout<AbilityCastStart> akhRhaiHealer = ModifiableCallout.durationBasedCall("Akh Rhai: Healer", "Bait AOE far");
@@ -100,7 +102,12 @@ public class O10S extends AutoChildEventHandler implements FilteredEventHandler 
                 else
                     call = akhRhai;
             }
-            case 0x31B9 -> call = horridRoar;
+            case 0x31B9 -> {
+                if(refire.check(event))
+                    call = horridRoar;
+                else
+                    return;
+            }
             default -> {
                 return;
             }
@@ -148,7 +155,8 @@ public class O10S extends AutoChildEventHandler implements FilteredEventHandler 
                     call = verticalHorizontal;
                 }
             }
-            case 0x3180 -> {
+            case 0x31B0 -> {
+                log.info("imi: casting 0x31B0/12720");
                 if(stockedSpin == StockedSpin.VERTICAL) {
                     call = doubleVertical;
                 } else {
