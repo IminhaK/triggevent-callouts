@@ -1,9 +1,7 @@
-package iminhak.alphascape;
+package iminhak.omega.alphascape;
 
-import gg.xp.reevent.events.BaseEvent;
 import gg.xp.reevent.events.EventContext;
 import gg.xp.reevent.scan.AutoChildEventHandler;
-import gg.xp.reevent.scan.AutoFeed;
 import gg.xp.reevent.scan.FilteredEventHandler;
 import gg.xp.reevent.scan.HandleEvents;
 import gg.xp.xivdata.data.duties.KnownDuty;
@@ -15,14 +13,13 @@ import gg.xp.xivsupport.events.actlines.events.HeadMarkerEvent;
 import gg.xp.xivsupport.events.actlines.events.actorcontrol.DutyCommenceEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
-import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
 import gg.xp.xivsupport.events.triggers.util.RepeatSuppressor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 
-@CalloutRepo(name = "O10S", duty = KnownDuty.O10S)
+@CalloutRepo(name = "Iminha's O10S", duty = KnownDuty.O10S)
 public class O10S extends AutoChildEventHandler implements FilteredEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(O10S.class);

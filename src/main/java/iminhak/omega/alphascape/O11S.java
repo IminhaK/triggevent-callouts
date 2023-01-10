@@ -1,4 +1,4 @@
-package iminhak.alphascape;
+package iminhak.omega.alphascape;
 
 import gg.xp.reevent.events.BaseEvent;
 import gg.xp.reevent.events.EventContext;

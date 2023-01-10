@@ -1,4 +1,4 @@
-package iminhak.alphascape;
+package iminhak.omega.alphascape;
 
 import gg.xp.reevent.events.BaseEvent;
 import gg.xp.reevent.events.EventContext;
@@ -19,8 +19,6 @@ import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTriggerController;
 import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
-import gg.xp.xivsupport.models.XivPlayerCharacter;
-import gg.xp.xivsupport.models.XivStatusEffect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
