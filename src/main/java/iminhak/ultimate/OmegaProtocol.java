@@ -32,10 +32,6 @@ public class OmegaProtocol extends AutoChildEventHandler implements FilteredEven
 
     private static final Logger log = LoggerFactory.getLogger(OmegaProtocol.class);
 
-    private final BooleanSetting useAutomarks;
-
-    private final BooleanSetting useCircleProgram;
-
     //Phase 1: Omega
     private final ModifiableCallout<BuffApplied> circleProgram_mustard1 = new ModifiableCallout<BuffApplied>("Circle program: First  Mustard", "One, take tether").autoIcon();
     private final ModifiableCallout<BuffApplied> circleProgram_mustard2 = new ModifiableCallout<BuffApplied>("Circle program: Second  Mustard", "Two, tether later").autoIcon();
@@ -43,12 +39,9 @@ public class OmegaProtocol extends AutoChildEventHandler implements FilteredEven
     private final ModifiableCallout<BuffApplied> circleProgram_patch2 = new ModifiableCallout<BuffApplied>("Circle Program: Second  Patch", "Two, tower later").autoIcon();
     private final ModifiableCallout<AbilityCastStart> circleProgram_takeMustard = new ModifiableCallout<AbilityCastStart>("Circle Program: Take tether", "Take tether");
 
-    public OmegaProtocol(XivState state, StatusEffectRepository buffs, PersistenceProvider pers) {
+    public OmegaProtocol(XivState state, StatusEffectRepository buffs) {
         this.state = state;
         this.buffs = buffs;
-        this.useAutomarks = new BooleanSetting(pers, "triggers.top.use-auto-markers", false);
-
-        this.useCircleProgram = new BooleanSetting(pers, "triggers.top.use-something", false);
     }
 
     private final XivState state;
@@ -81,7 +74,6 @@ public class OmegaProtocol extends AutoChildEventHandler implements FilteredEven
     private final SequentialTrigger<BaseEvent> circleProgram = SqtTemplates.sq(60_000, AbilityCastStart.class,
             acs -> acs.abilityIdMatches(0x0), //TODO: Insert correct ID for Circle Program cast
             (e1, s) -> {
-                Boolean useThisAM = getUseCircleProgram().get() && getUseAutomarks().get();
                 log.info("Circle Program: start");
                 List<BuffApplied> lineDebuffs = s.waitEvents(8, BuffApplied.class, circleProgramNumber); //TODO: Confirm number of line debuffs applied
                 Optional<BuffApplied> lineDebuffOnPlayer = lineDebuffs.stream().filter(ba -> ba.getTarget().isThePlayer()).findFirst();
@@ -113,13 +105,5 @@ public class OmegaProtocol extends AutoChildEventHandler implements FilteredEven
 
     private void secondUse(AbilityCastStart e1, SequentialTriggerController<BaseEvent> s) {
 
-    }
-
-    public BooleanSetting getUseAutomarks() {
-        return useAutomarks;
-    }
-
-    public BooleanSetting getUseCircleProgram() {
-        return useCircleProgram;
     }
 }
