@@ -163,42 +163,10 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     //Status loop vfx (noticed 21E, 221, 222)
     //circles used 8024 when starting purg, and 8025 when ending
     @AutoFeed
-    public SequentialTrigger<BaseEvent> purgatorySq = SqtTemplates.multiInvocation(13_000, AbilityCastStart.class,
-            ace -> ace.abilityIdMatches(0x80E9));
+    public SequentialTrigger<BaseEvent> purgatorySq = SqtTemplates.sq(13_000, AbilityCastStart.class,
+            ace -> ace.abilityIdMatches(0x80E9),
+            (e1, s) -> {
+                log.info("Purgatory: Start");
 
-    //DEBUG
-    @HandleEvents
-    public void debugUsed(EventContext context, AbilityUsedEvent event) {
-        int id = (int) event.getAbility().getId();
-        String source = event.getSource().toString();
-        switch (id) {
-            case 0x8024 -> log.info("IminhaDebug: AUE 0x8024 by {}", source);
-            case 0x7efa -> log.info("IminhaDebug: AUE 0x7efa by {}", source);
-            case 0x7efb -> log.info("IminhaDebug: AUE 0x7efb by {}", source);
-            case 0x7cbf -> log.info("IminhaDebug: AUE 0x7cbf by {}", source);
-            case 0x8025 -> log.info("IminhaDebug: AUE 0x8025 by {}", source);
-            case 0x7cc0 -> log.info("IminhaDebug: AUE 0x7cc0 by {}", source);
-        }
-    }
-
-    @HandleEvents
-    public void debugVFX(EventContext context, StatusLoopVfxApplied event) {
-        int id = (int) event.getStatusLoopVfx().getId();
-        String source = event.getTarget().toString();
-        switch (id) {
-            case 542 -> log.info("IminhaDebug: VFX 542 on {}", source);
-            case 543 -> log.info("IminhaDebug: VFX 543 on {}", source);
-            case 544 -> log.info("IminhaDebug: VFX 544 on {}", source);
-            case 545 -> log.info("IminhaDebug: VFX 545 on {}", source);
-            case 546 -> log.info("IminhaDebug: VFX 546 on {}", source);
-        }
-    }
-
-    @HandleEvents
-    public void appliedDebug(EventContext context, BuffApplied event) {
-        int stacks = (int) event.getRawStacks();
-        String source = event.getSource().toString();
-        if(event.getBuff().getId() == 0x891)
-            log.info("IminhaDebug: 891 buff, {} stacks on {}", stacks, source);
-    }
+            });
 }
