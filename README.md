@@ -7,6 +7,7 @@ For support visit [my discord server](https://discord.gg/nVdhQyk8Uz).
 ## Supported Duties
 Endwalker Extremes:
 - Rubicante
+  - Currently not including Ordeal of Purgation (help appreciated!!)
 Omega:
 - O8SP2
 - O10S
