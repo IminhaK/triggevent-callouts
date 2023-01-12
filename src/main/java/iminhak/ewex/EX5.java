@@ -16,6 +16,9 @@ import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
 import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
+import gg.xp.xivsupport.models.ArenaPos;
+import gg.xp.xivsupport.models.ArenaSector;
+import gg.xp.xivsupport.models.XivCombatant;
 import gg.xp.xivsupport.models.XivPlayerCharacter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +52,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     private final ModifiableCallout<BuffApplied> flamespireOut = new ModifiableCallout<>("Flamespire Brand: Flare", "Flare, out soon");
     private final ModifiableCallout<BuffApplied> flamespireIn = new ModifiableCallout<>("Flamespire Brand: Nothing", "Stack middle soon");
     private final ModifiableCallout<BuffApplied> flamespireSpread = new ModifiableCallout<>("Flamespire Brand: Spread", "Spread");
+    private final ModifiableCallout<BuffApplied> flamespireOutME = new ModifiableCallout<>("Flamespire Brand: Flare + Safety", "Flare, out soon, {safe} safe");
+    private final ModifiableCallout<BuffApplied> flamespireInME = new ModifiableCallout<>("Flamespire Brand: Nothing + Safety", "Stack middle soon, {safe} safe");
 
     public EX5(XivState state, StatusEffectRepository buffs) {
         this.state = state;
@@ -142,26 +147,61 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         context.accept(call.getModified(event));
     }
 
+    //Slots:
+    //04 = Flamespire brand indicator
+    //04 flags:
+    //00010001 = cardinals safe
+    //00200020 = intercards safe
+    //00080004 = clear indicator
     @AutoFeed
     public SequentialTrigger<BaseEvent> flamespireBrandSq = SqtTemplates.sq(22_000, AbilityCastStart.class,
             ace -> ace.abilityIdMatches(0x7D13),
             (e1, s) -> {
                 log.info("Flamespire Brand: Start");
                 List<BuffApplied> stack = s.waitEventsQuickSuccession(4, BuffApplied.class, ba -> ba.buffIdMatches(0xD9C), Duration.ofMillis(200));
-                if(stack.contains(getState().getPlayer())) {
-                    s.accept(flamespireOut.getModified());
+                List<MapEffectEvent> me = s.waitEventsUntil(1, MapEffectEvent.class, mee -> mee.getIndex() == 4, AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7D17));
+                if(!me.isEmpty()) {
+                    String safe;
+                    if(me.get(0).getFlags() == 00010001) {
+                        safe = "cardinals";
+                    } else {
+                        safe = "intercardinals";
+                    }
+
+                    if(stack.stream().map(BuffApplied::getTarget).anyMatch(XivCombatant::isThePlayer)) {
+                        s.accept(flamespireOutME.getModified(Map.of("safe", safe)));
+                    } else {
+                        s.accept(flamespireInME.getModified(Map.of("safe", safe)));
+                    }
                 } else {
-                    s.accept(flamespireIn.getModified());
+                    if(stack.stream().map(BuffApplied::getTarget).anyMatch(XivCombatant::isThePlayer)) {
+                        s.accept(flamespireOut.getModified());
+                    } else {
+                        s.accept(flamespireIn.getModified());
+                    }
                 }
+
 
                 log.info("Flamespire Brand: Waiting for stack to drop");
                 s.waitEvent(BuffRemoved.class, br -> br.buffIdMatches(0xD9C)); //ID for stack debuff
                 s.accept(flamespireSpread.getModified());
             });
 
-    //Possibilities:
-    //Status loop vfx (noticed 21E, 221, 222)
-    //circles used 8024 when starting purg, and 8025 when ending
+    //Slots:
+    //00 = Arena fiery or not
+    //01 = Inner circle
+    //02 = Middle ring
+    //03 = Outer ring
+    //
+    //00 flags:
+    //00020001 = Fiery
+    //00080004 = Not fiery
+    //
+    //01/02/03 flags:
+    //00020001 = Arrows rotating CW
+    //00080004 = Clear CW arrows
+    //00200010 = Arrows rotating CCW
+    //00400004 = Clear CCW arrows
     @AutoFeed
     public SequentialTrigger<BaseEvent> purgatorySq = SqtTemplates.sq(13_000, AbilityCastStart.class,
             ace -> ace.abilityIdMatches(0x80E9),
