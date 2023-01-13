@@ -10,19 +10,23 @@ import gg.xp.xivdata.data.duties.KnownDuty;
 import gg.xp.xivsupport.callouts.CalloutRepo;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
 import gg.xp.xivsupport.events.actlines.events.*;
-import gg.xp.xivsupport.events.actlines.events.vfx.StatusLoopVfxApplied;
 import gg.xp.xivsupport.events.misc.pulls.PullStartedEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
+import gg.xp.xivsupport.events.triggers.seq.SequentialTriggerController;
 import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
-import gg.xp.xivsupport.models.XivPlayerCharacter;
+import gg.xp.xivsupport.models.ArenaPos;
+import gg.xp.xivsupport.models.ArenaSector;
+import gg.xp.xivsupport.models.XivCombatant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @CalloutRepo(name = "Rubicante Extreme", duty = KnownDuty.RubicanteEx)
 public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
@@ -49,6 +53,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     private final ModifiableCallout<BuffApplied> flamespireOut = new ModifiableCallout<>("Flamespire Brand: Flare", "Flare, out soon");
     private final ModifiableCallout<BuffApplied> flamespireIn = new ModifiableCallout<>("Flamespire Brand: Nothing", "Stack middle soon");
     private final ModifiableCallout<BuffApplied> flamespireSpread = new ModifiableCallout<>("Flamespire Brand: Spread", "Spread");
+    private final ModifiableCallout<BuffApplied> flamespireOutME = new ModifiableCallout<>("Flamespire Brand: Flare + Safety", "Flare, out soon, {safe} safe");
+    private final ModifiableCallout<BuffApplied> flamespireInME = new ModifiableCallout<>("Flamespire Brand: Nothing + Safety", "Stack middle soon, {safe} safe");
 
     public EX5(XivState state, StatusEffectRepository buffs) {
         this.state = state;
@@ -84,6 +90,12 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     @HandleEvents
     public void reset(EventContext context, PullStartedEvent event) {
         firstHeadmark = null;
+        marksOfPurgatory = null;
+        rubicante = null;
+        circlesOfHell = null;
+        innerCircle = null;
+        middleCircle = null;
+        outerCircle = null;
     }
 
     @HandleEvents(order = -50_000)
@@ -142,31 +154,384 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         context.accept(call.getModified(event));
     }
 
+    //Slots:
+    //04 = Flamespire brand indicator
+    //04 flags:
+    //01000100 = cardinals safe
+    //200020 = intercards safe
+    //00080004 = clear indicator
     @AutoFeed
     public SequentialTrigger<BaseEvent> flamespireBrandSq = SqtTemplates.sq(22_000, AbilityCastStart.class,
             ace -> ace.abilityIdMatches(0x7D13),
             (e1, s) -> {
                 log.info("Flamespire Brand: Start");
                 List<BuffApplied> stack = s.waitEventsQuickSuccession(4, BuffApplied.class, ba -> ba.buffIdMatches(0xD9C), Duration.ofMillis(200));
-                if(stack.contains(getState().getPlayer())) {
-                    s.accept(flamespireOut.getModified());
+                List<MapEffectEvent> me = s.waitEventsUntil(1, MapEffectEvent.class, mee -> mee.getIndex() == 4, AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7D17));
+                if(!me.isEmpty()) {
+                    String safe;
+                    log.info("Flamespire Brand: me: {}", me.get(0).getFlags());
+                    if(me.get(0).getFlags() == 0x01000100) {
+                        safe = "cardinals";
+                    } else {
+                        safe = "intercardinals";
+                    }
+
+                    if(stack.stream().map(BuffApplied::getTarget).anyMatch(XivCombatant::isThePlayer)) {
+                        s.accept(flamespireOutME.getModified(Map.of("safe", safe)));
+                    } else {
+                        s.accept(flamespireInME.getModified(Map.of("safe", safe)));
+                    }
                 } else {
-                    s.accept(flamespireIn.getModified());
+                    if(stack.stream().map(BuffApplied::getTarget).anyMatch(XivCombatant::isThePlayer)) {
+                        s.accept(flamespireOut.getModified());
+                    } else {
+                        s.accept(flamespireIn.getModified());
+                    }
                 }
+
 
                 log.info("Flamespire Brand: Waiting for stack to drop");
                 s.waitEvent(BuffRemoved.class, br -> br.buffIdMatches(0xD9C)); //ID for stack debuff
                 s.accept(flamespireSpread.getModified());
             });
 
-    //Possibilities:
-    //Status loop vfx (noticed 21E, 221, 222)
-    //circles used 8024 when starting purg, and 8025 when ending
-    @AutoFeed
-    public SequentialTrigger<BaseEvent> purgatorySq = SqtTemplates.sq(13_000, AbilityCastStart.class,
-            ace -> ace.abilityIdMatches(0x80E9),
-            (e1, s) -> {
-                log.info("Purgatory: Start");
+    private static boolean ringMapEffect(MapEffectEvent mee) {
+        return mee.getIndex() == 1 || mee.getIndex() == 2 || mee.getIndex() == 3;
+    }
 
-            });
+    private static EX5.Rotation rotationFromMapEffect(MapEffectEvent mee) {
+        int flag = (int) mee.getFlags();
+        return switch (flag) {
+            case 0x00020001 -> Rotation.CLOCKWISE;
+            case 0x00200010 -> Rotation.COUNTERCLOCKWISE;
+            default -> Rotation.UNKNOWN;
+        };
+    }
+
+    private static EX5.Ring ringFromMapEffect(MapEffectEvent mee) {
+        int index = (int) mee.getIndex();
+        return switch (index) {
+            case 01 -> Ring.INNER;
+            case 02 -> Ring.MID;
+            case 03 -> Ring.OUTER;
+            default -> Ring.UNKNOWN;
+        };
+    }
+
+    private static EX5.Ring ringFromCombatant(XivCombatant cbt) {
+        int id = (int) cbt.getbNpcId();
+        return switch (id) {
+            case 15765 -> Ring.INNER;
+            case 15766 -> Ring.MID;
+            case 15767 -> Ring.OUTER;
+            default -> Ring.UNKNOWN;
+        };
+    }
+
+    //For use with midRingTranslation
+    private static int indexOffsetFromCombatant(XivCombatant cbt) {
+        ArenaSector facing = ArenaPos.combatantFacing(cbt);
+        return switch(facing) {
+            case NORTH -> 0;
+            case NORTHEAST -> 1;
+            case EAST -> 2;
+            case SOUTHEAST -> 3;
+            case SOUTH -> 4;
+            case SOUTHWEST -> 5;
+            case WEST -> 6;
+            case NORTHWEST -> 7;
+            default -> 0;
+        };
+    }
+
+    private static ArenaSector arenaSectorFromIndex(int index) {
+        return ArenaSector.NORTH.plusEighths(index);
+    }
+
+    private enum Ring {
+        INNER,
+        MID,
+        OUTER,
+        UNKNOWN
+    }
+
+    private enum Rotation {
+        CLOCKWISE,
+        COUNTERCLOCKWISE,
+        UNKNOWN
+    }
+
+    //index 0 is north, going CW
+    //indicates what happens if the fire goes through that direction
+    //E/W impossible
+    //N, NE, E, SE, S, SW, W, NW
+    //-1 makes it move CCW, 1 makes it move CW
+    static final int[] midRingTranslation = {0, 0, 0, 1, 0, -1, 0, 0};
+
+    List<XivCombatant> marksOfPurgatory;
+    XivCombatant rubicante;
+    List<XivCombatant> circlesOfHell;
+    XivCombatant innerCircle;
+    XivCombatant middleCircle;
+    XivCombatant outerCircle;
+    //Slots:
+    //00 = Arena fiery or not
+    //01 = Inner circle
+    //02 = Middle ring
+    //03 = Outer ring
+    //
+    //00 flags:
+    //00020001 = Fiery
+    //00080004 = Not fiery
+    //
+    //01/02/03 flags:
+    //00020001 = Arrows rotating CW
+    //00080004 = Clear CW arrows
+    //00200010 = Arrows rotating CCW
+    //00400004 = Clear CCW arrows
+    //NPC IDs:
+    //15759 = triangle
+    //15760 = square
+    //15765 = inner circle of hell
+    //15766 = middle circle of hell
+    //15767 = outer circle of hell
+    @AutoFeed
+    public SequentialTrigger<BaseEvent> hopeAbandonYeSq = SqtTemplates.multiInvocation(75_000, AbilityUsedEvent.class,
+            aue -> aue.abilityIdMatches(0x7F27), //TODO: have this entire thing happen twice per "hope abandon ye"
+            this::hopeAbandonYe1,
+            this::hopeAbandonYe2,
+            this::hopeAbandonYe3
+            );
+
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Triangle = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Cone", "{safe1}, {safe2}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Square = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Square", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation2 = ModifiableCallout.durationBasedCall("HAY 1: Purgation 2", "{safe}");
+
+    public void hopeAbandonYe1(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
+        log.info("Hope Abandon Ye 1: Start, purgation 1");
+        //Map effects are before he starts casting
+        List<MapEffectEvent> mapEffects = s.waitEvents(2, MapEffectEvent.class, EX5::ringMapEffect);
+        Optional<MapEffectEvent> inner = mapEffects.stream().filter(mee -> mee.getIndex() == 01).findFirst();
+        Optional<MapEffectEvent> outer = mapEffects.stream().filter(mee -> mee.getIndex() == 03).findFirst();
+        if(inner.isPresent() && outer.isPresent()) {
+
+            //Ordeal of Purgation cast start
+            log.info("Hope Abandone Ye 1: Waiting for cast 1 to start");
+            s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
+            refreshHopeAbandonYeActors(s);
+
+            //First pattern is one line, in direction he is facing
+            int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
+            int midRotationIndex = indexOffsetFromCombatant(middleCircle);
+            int innerSpin = rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1;
+            int flameDestination = Math.floorMod((midRingTranslation[Math.floorMod(midRotationIndex - innerSpin - rubiFacingIndex, 8)]) + rubiFacingIndex + innerSpin, 8);
+            log.info("Flame 1 Destination: {} {}", flameDestination, arenaSectorFromIndex(flameDestination));
+            //TODO: Figure out which shape will land at this destination
+
+            //Second Ordeal of Purgation
+            s.waitMs(1_000);
+            log.info("Hope Abandone Ye 1: Waiting for cast 2 to start");
+            s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
+            refreshHopeAbandonYeActors(s);
+            //This pattern is just behind the perpendicular lines, he always faces the line that is most CCW, so just get 5 rotations from his location
+            int flameDestination2 = Math.floorMod(indexOffsetFromCombatant(rubicante) + 5, 8);
+            log.info("Flame 2 Safe spot: {} {}", flameDestination2, arenaSectorFromIndex(flameDestination2));
+            s.accept(hopeAbandonYe1Purgation2.getModified(Map.of("safe", arenaSectorFromIndex(flameDestination2))));
+
+            //gimmeHopeAbandonYePostMechDebug(s);
+        }
+    }
+
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe2Purgation1 = ModifiableCallout.durationBasedCall("HAY 2: Purgation 1", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe2Purgation2 = ModifiableCallout.durationBasedCall("HAY 2: Purgation 2", "Between {safe}");
+
+    private void hopeAbandonYe2(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
+        log.info("Hope Abandon Ye 2: Start, pattern 1");
+        //Map effects before the cast begins
+        MapEffectEvent middlemapeffect = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
+        log.info("Hope Abandon Ye 2: Waiting for cast 1 to start");
+        s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
+        refreshHopeAbandonYeActors(s);
+
+        //first pattern is gonna be cw safe from the destination of the ccw most line
+        int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
+        int midRotationIndex = indexOffsetFromCombatant(middleCircle);
+        int midSpin = rotationFromMapEffect(middlemapeffect) == Rotation.CLOCKWISE ? 1 : -1;
+        int flameDestination = Math.floorMod(rubiFacingIndex + midRingTranslation[Math.floorMod(midRotationIndex + midSpin - rubiFacingIndex, 8)], 8);
+        int flame1point5Destination = Math.floorMod(rubiFacingIndex + 2 + midRingTranslation[Math.floorMod(midRotationIndex + midSpin - (rubiFacingIndex + 2), 8)], 8);
+        log.info("Flame 1 destination: {} {}", flameDestination, arenaSectorFromIndex(flameDestination));
+        log.info("Flame 1.5 destination: {} {}", flame1point5Destination, arenaSectorFromIndex(flame1point5Destination));
+        if(flame1point5Destination - flameDestination == 1) { //triangles right next to eachother, safe 2 cw from it
+            s.accept(hopeAbandonYe2Purgation1.getModified(Map.of("safe", arenaSectorFromIndex(flameDestination).plusEighths(2))));
+        } else { //split, safe between them
+            s.accept(hopeAbandonYe2Purgation1.getModified(Map.of("safe", arenaSectorFromIndex(flameDestination).plusEighths(1))));
+        }
+
+        //Second ordeal of purgation
+        s.waitMs(1_000);
+        log.info("Hope Abandon Ye 2: Waiting for map effect");
+        //Map effects before the cast begins
+        MapEffectEvent middlemapeffect2 = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
+        log.info("Hope Abandon Ye 2: waiting for second cast");
+        s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
+        refreshHopeAbandonYeActors(s);
+
+        //second pattern is double squares, leaving one eighth safe, mid rotates TODO: investigate, southwest called when it was northwest, east called correctly
+        List<ArenaSector> safe = new ArrayList<>(ArenaSector.all);
+        int midRotationIndex2 = indexOffsetFromCombatant(middleCircle);
+        int midSpin2 = rotationFromMapEffect(middlemapeffect2) == Rotation.CLOCKWISE ? 1 : -1;
+        int fuse1Index = Math.floorMod(indexOffsetFromCombatant(rubicante) - 2, 8);
+        int fuse1Destination = Math.floorMod(fuse1Index + midRingTranslation[Math.floorMod(midRotationIndex2 + midSpin2 - fuse1Index, 8)], 8);
+        ArenaSector fuse1Sector = arenaSectorFromIndex(fuse1Destination);
+        int fuse2Index = Math.floorMod(indexOffsetFromCombatant(rubicante) + 2, 8);
+        int fuse2Destination = Math.floorMod(fuse2Index + midRingTranslation[Math.floorMod(midRotationIndex2 + midSpin2 - fuse2Index, 8)], 8);
+        ArenaSector fuse2Sector = arenaSectorFromIndex(fuse2Destination);
+        log.info("Hope Abandon Ye 2 DEBUG: midrotatioindex: {}, midspin: {}, fuse1index: {}, fuse2index: {}", midRotationIndex2, midSpin2, fuse1Index, fuse2Index);
+        log.info("Hope Abandon Ye 2: squares are at {} and {}", fuse1Sector, fuse2Sector);
+
+        safe.remove(fuse1Sector);
+        safe.remove(fuse1Sector.plusEighths(1));
+        safe.remove(fuse1Sector.plusEighths(-1));
+        safe.remove(fuse2Sector);
+        safe.remove(fuse2Sector.plusEighths(1));
+        safe.remove(fuse2Sector.plusEighths(-1));
+
+        s.accept(hopeAbandonYe2Purgation2.getModified(Map.of("safe", safe)));
+    }
+
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 1", "{safe}");
+
+    public void hopeAbandonYe3(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
+        log.info("Hope Abandon Ye 3: Start, purgation 1");
+        List<MapEffectEvent> mapEffects = s.waitEvents(2, MapEffectEvent.class, EX5::ringMapEffect);
+        Optional<MapEffectEvent> inner = mapEffects.stream().filter(mee -> mee.getIndex() == 01).findFirst();
+        Optional<MapEffectEvent> middle = mapEffects.stream().filter(mee -> mee.getIndex() == 02).findFirst();
+        if(inner.isPresent() && middle.isPresent()) {
+            //Ordeal of Purgation cast start
+            log.info("Hope Abandone Ye 3: Waiting for cast 1 to start");
+            s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
+            refreshHopeAbandonYeActors(s);
+
+            int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
+            int midRotationIndex = indexOffsetFromCombatant(middleCircle);
+            int innerSpin = rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1;
+            int middleSpin = rotationFromMapEffect(middle.get()) == Rotation.CLOCKWISE ? 1 : -1;
+            int flameDestination = Math.floorMod(rubiFacingIndex + innerSpin + midRingTranslation[Math.floorMod(midRotationIndex + middleSpin - rubiFacingIndex - innerSpin, 8)], 8);
+            ArenaSector coneSector = arenaSectorFromIndex(flameDestination);
+            s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", coneSector.plusEighths(2))));
+
+            log.info("Hope Abandon Ye 3: Waiting for map effects"); //impossible without knowing outer symbols
+            MapEffectEvent mapEffect = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
+
+            log.info("Hope Abandone Ye 3: Waiting for cast 2 to start");
+            s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
+            refreshHopeAbandonYeActors(s);
+        }
+    }
+
+    public void refreshHopeAbandonYeActors(SequentialTriggerController<BaseEvent> s) {
+        s.waitMs(500); //he could still be turning
+        s.refreshCombatants(100);
+        log.info("refreshHopeAbandonYeActors: Starting, finding boss");
+        Optional<XivCombatant> maybeRubicante;
+        do {
+            maybeRubicante = getState().getCombatants().values().stream().filter(cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15756;
+            }).findFirst();
+            if(maybeRubicante.isPresent()) {
+                rubicante = maybeRubicante.get();
+                break;
+            } else {
+                s.refreshCombatants(200);
+            }
+        } while (true);
+
+        log.info("refreshHopeAbandonYeActors: Finding Circles of Purgatory (outside)");
+        do {
+            marksOfPurgatory = getState().getCombatants().values().stream().filter(cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15759 || id == 15760;
+            }).toList();
+            if(marksOfPurgatory.size() < 16) {
+                s.refreshCombatants(200);
+            } else {
+                break;
+            }
+        } while (true);
+
+        log.info("refreshHopeAbandonYeActors: Finding floor circles");
+        do {
+            circlesOfHell = getState().getCombatants().values().stream().filter( cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15765 || id == 15766 || id == 15767;
+            }).toList();
+            if(circlesOfHell.size() < 3) {
+                s.refreshCombatants(200);
+            } else {
+                break;
+            }
+        } while (true);
+
+        Optional<XivCombatant> maybeInner;
+        do {
+            maybeInner = circlesOfHell.stream().filter(cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15765;
+            }).findFirst();
+            if(maybeInner.isPresent()) {
+                innerCircle = maybeInner.get();
+                break;
+            }
+        } while (true);
+
+        Optional<XivCombatant> maybeMiddle;
+        do {
+            maybeMiddle = circlesOfHell.stream().filter(cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15766;
+            }).findFirst();
+            if(maybeMiddle.isPresent()) {
+                middleCircle = maybeMiddle.get();
+                break;
+            }
+        } while (true);
+
+        Optional<XivCombatant> maybeOuter;
+        do {
+            maybeOuter = circlesOfHell.stream().filter(cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15767;
+            }).findFirst();
+            if(maybeOuter.isPresent()) {
+                outerCircle = maybeOuter.get();
+                break;
+            }
+        } while (true);
+
+        log.info("refreshHopeAbandonYeActors: Done.");
+    }
+
+    public void gimmeHopeAbandonYePostMechDebug(SequentialTriggerController<BaseEvent> s) {
+        //POST-MECH DEBUG
+        s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x80E9));
+        s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7CEF, 0x7CF0));
+        List<XivCombatant> circlesOfHellNEW;
+        do {
+            circlesOfHellNEW = getState().getCombatants().values().stream().filter( cbt -> {
+                long id = cbt.getbNpcId();
+                return id == 15765 || id == 15766 || id == 15767;
+            }).toList();
+            if(circlesOfHellNEW.size() < 3) {
+                s.refreshCombatants(200);
+            } else {
+                break;
+            }
+        } while (true);
+        for (XivCombatant cbt : circlesOfHellNEW) {
+            EX5.Ring ring = ringFromCombatant(cbt);
+            ArenaSector facing = ArenaPos.combatantFacing(cbt);
+            log.info("AND NOW {} is LOOKING: {}", ring, facing);
+        }
+    }
 }
