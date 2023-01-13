@@ -173,8 +173,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                 List<MapEffectEvent> me = s.waitEventsUntil(1, MapEffectEvent.class, mee -> mee.getIndex() == 4, AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7D17));
                 if(!me.isEmpty()) {
                     String safe;
-                    log.info("Flamespire Brand: me: {}", me.get(0).getFlags());
-                    if(me.get(0).getFlags() == 0x01000100) {
+                    log.info("Flamespire Brand: me: {} (0x1000100/16777472 should be card safe)", me.get(0).getFlags());
+                    if(me.get(0).getFlags() == 0x1000100) {
                         safe = "cardinals";
                     } else {
                         safe = "intercardinals";
@@ -308,7 +308,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             this::hopeAbandonYe3
             );
 
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Triangle = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Cone", "{safe1}, {safe2}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Triangle = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Cone", "{safe1} or {safe2}");
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Square = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Square", "{safe}");
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation2 = ModifiableCallout.durationBasedCall("HAY 1: Purgation 2", "{safe}");
 
@@ -329,9 +329,20 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
             int midRotationIndex = indexOffsetFromCombatant(middleCircle);
             int innerSpin = rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1;
+            int outerSpin = rotationFromMapEffect(outer.get()) == Rotation.CLOCKWISE ? 1 : -1;
             int flameDestination = Math.floorMod((midRingTranslation[Math.floorMod(midRotationIndex - innerSpin - rubiFacingIndex, 8)]) + rubiFacingIndex + innerSpin, 8);
             log.info("Flame 1 Destination: {} {}", flameDestination, arenaSectorFromIndex(flameDestination));
-            //TODO: Figure out which shape will land at this destination
+            //Thanks Sinbad in the ACT discord for this solution
+            //inner == outer: rectangle
+            //inner != outer: triangle
+            if(innerSpin == outerSpin) {
+                s.accept(hopeAbandonYe1Purgation1Square.getModified(Map.of(
+                        "safe", arenaSectorFromIndex(flameDestination).opposite())));
+            } else {
+                s.accept(hopeAbandonYe1Purgation1Triangle.getModified(Map.of(
+                        "safe1", arenaSectorFromIndex(flameDestination).plusEighths(-1),
+                        "safe2", arenaSectorFromIndex(flameDestination).plusEighths(1))));
+            }
 
             //Second Ordeal of Purgation
             s.waitMs(1_000);
