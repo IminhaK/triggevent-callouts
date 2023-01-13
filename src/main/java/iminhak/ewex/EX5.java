@@ -157,15 +157,19 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     //Slots:
     //04 = Flamespire brand indicator
     //04 flags:
-    //01000100 = cardinals safe
-    //200020 = intercards safe
+    //01000100 = cardinals safe?
+    //200020 = intercards safe?
     //00080004 = clear indicator
+    //Buffs:
+    //D9B flare
+    //D9C stack
+    //D9D aoe
     @AutoFeed
     public SequentialTrigger<BaseEvent> flamespireBrandSq = SqtTemplates.sq(22_000, AbilityCastStart.class,
             ace -> ace.abilityIdMatches(0x7D13),
             (e1, s) -> {
                 log.info("Flamespire Brand: Start");
-                List<BuffApplied> stack = s.waitEventsQuickSuccession(4, BuffApplied.class, ba -> ba.buffIdMatches(0xD9C), Duration.ofMillis(200));
+                List<BuffApplied> stack = s.waitEventsQuickSuccession(4, BuffApplied.class, ba -> ba.buffIdMatches(0xD9B), Duration.ofMillis(200));
                 List<MapEffectEvent> me = s.waitEventsUntil(1, MapEffectEvent.class, mee -> mee.getIndex() == 4, AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7D17));
                 if(!me.isEmpty()) {
                     String safe;
@@ -175,6 +179,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                     } else {
                         safe = "intercardinals";
                     }
+                    log.info("Flamespire Brand: {} safe", safe);
 
                     if(stack.stream().map(BuffApplied::getTarget).anyMatch(XivCombatant::isThePlayer)) {
                         s.accept(flamespireOutME.getModified(Map.of("safe", safe)));
