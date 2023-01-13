@@ -416,6 +416,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     }
 
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 1", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2minus1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 2 CCW safe", "Counterclockwise from {safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2plus3 = ModifiableCallout.durationBasedCall("Hay 3: Purgation 2 CW safe", "Clockwise from {}");
 
     public void hopeAbandonYe3(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
         log.info("Hope Abandon Ye 3: Start, purgation 1");
@@ -436,12 +438,30 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             ArenaSector coneSector = arenaSectorFromIndex(flameDestination);
             s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", coneSector.plusEighths(2))));
 
-            log.info("Hope Abandon Ye 3: Waiting for map effects"); //impossible without knowing outer symbols
+            log.info("Hope Abandon Ye 3: Waiting for map effects");
             MapEffectEvent mapEffect = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
 
             log.info("Hope Abandone Ye 3: Waiting for cast 2 to start");
             s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
             refreshHopeAbandonYeActors(s);
+
+            //solution by:
+            //https://www.youtube.com/watch?v=TNzz215p_N4&ab_channel=Kaouri
+            //find middle translation to the left or right of the perpendicular lines
+            // (rubifacing + 1), then check -2 and +2 from here on midRingTranslation (rubifacing then -1 or +3)
+            // if its -2, call "ccw of [-2]"
+            // if its +2, call "cw of [2]"
+
+            int rubiFacingIndex2 = indexOffsetFromCombatant(rubicante);
+            int midRotationIndex2 = indexOffsetFromCombatant(middleCircle);
+            int minus1midTranslation = midRingTranslation[midRotationIndex2 - rubiFacingIndex2 - 1];
+            int plus3midTranslation = midRingTranslation[midRotationIndex2 - rubiFacingIndex2 + 3];
+            ArenaSector rubiFacing = ArenaPos.combatantFacing(rubicante);
+            if(minus1midTranslation == 0) {
+                s.accept(hopeAbandonYe3Purgation2minus1.getModified(Map.of("safe", rubiFacing.plusEighths(-1))));
+            } else if(plus3midTranslation == 0) {
+                s.accept(hopeAbandonYe3Purgation2plus3.getModified(Map.of("safe", rubiFacing.plusEighths(3))));
+            }
         }
     }
 
