@@ -56,6 +56,15 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     private final ModifiableCallout<BuffApplied> flamespireOutME = new ModifiableCallout<>("Flamespire Brand: Flare + Safety", "Flare, out soon, {safe} safe");
     private final ModifiableCallout<BuffApplied> flamespireInME = new ModifiableCallout<>("Flamespire Brand: Nothing + Safety", "Stack middle soon, {safe} safe");
 
+    private final ModifiableCallout<HeadMarkerEvent> limitCut1= new ModifiableCallout<>("Limit Cut: 1", "1", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut2= new ModifiableCallout<>("Limit Cut: 2", "2", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut3= new ModifiableCallout<>("Limit Cut: 3", "3", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut4= new ModifiableCallout<>("Limit Cut: 4", "4", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut5= new ModifiableCallout<>("Limit Cut: 5", "5", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut6= new ModifiableCallout<>("Limit Cut: 6", "6", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut7= new ModifiableCallout<>("Limit Cut: 7", "7", 20_000);
+    private final ModifiableCallout<HeadMarkerEvent> limitCut8= new ModifiableCallout<>("Limit Cut: 8", "8", 20_000);
+
     public EX5(XivState state, StatusEffectRepository buffs) {
         this.state = state;
         this.buffs = buffs;
@@ -134,7 +143,20 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         int offset = getHeadmarkerOffset(event);
         final ModifiableCallout<HeadMarkerEvent> call;
         if(offset >= -263 && offset <= -256 && event.getTarget().isThePlayer()) {
-            context.accept(limitCutNumber.getModified(event, Map.of("number", offset + 264)));
+            switch(offset + 264) {
+                case 1 -> call = limitCut1;
+                case 2 -> call = limitCut2;
+                case 3 -> call = limitCut3;
+                case 4 -> call = limitCut4;
+                case 5 -> call = limitCut5;
+                case 6 -> call = limitCut6;
+                case 7 -> call = limitCut7;
+                case 8 -> call = limitCut8;
+                default -> {
+                    return;
+                }
+            }
+            context.accept(call.getModified(event));
         }
     }
 
@@ -173,7 +195,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                 List<MapEffectEvent> me = s.waitEventsUntil(1, MapEffectEvent.class, mee -> mee.getIndex() == 4, AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7D17));
                 if(!me.isEmpty()) {
                     String safe;
-                    log.info("Flamespire Brand: me: {} (0x1000100/16777472 should be card safe)", me.get(0).getFlags());
+                    log.info("Flamespire Brand: me: {}", me.get(0).getFlags());
                     if(me.get(0).getFlags() != 0x20002 && me.get(0).getFlags() != 0x2000200) {
                         safe = "cardinals";
                     } else {
@@ -291,15 +313,15 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     //15767 = outer circle of hell
     @AutoFeed
     public SequentialTrigger<BaseEvent> hopeAbandonYeSq = SqtTemplates.multiInvocation(75_000, AbilityUsedEvent.class,
-            aue -> aue.abilityIdMatches(0x7F27), //TODO: have this entire thing happen twice per "hope abandon ye"
+            aue -> aue.abilityIdMatches(0x7F27),
             this::hopeAbandonYe1,
             this::hopeAbandonYe2,
             this::hopeAbandonYe3
             );
 
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Triangle = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Cone", "{safe1} or {safe2}");
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Square = ModifiableCallout.durationBasedCall("HAY 1: Purgation 1 Square", "{safe}");
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation2 = ModifiableCallout.durationBasedCall("HAY 1: Purgation 2", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Triangle = new ModifiableCallout<>("HAY 1: Purgation 1 Cone", "{safe1} or {safe2}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Square = new ModifiableCallout<>("HAY 1: Purgation 1 Square", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation2 = new ModifiableCallout<>("HAY 1: Purgation 2", "{safe}");
 
     public void hopeAbandonYe1(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
         log.info("Hope Abandon Ye 1: Start, purgation 1");
@@ -357,8 +379,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         }
     }
 
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe2Purgation1 = ModifiableCallout.durationBasedCall("HAY 2: Purgation 1", "{safe}");
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe2Purgation2 = ModifiableCallout.durationBasedCall("HAY 2: Purgation 2", "Between {safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe2Purgation1 = new ModifiableCallout<>("HAY 2: Purgation 1", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe2Purgation2 = new ModifiableCallout<>("HAY 2: Purgation 2", "Between {safe}");
 
     private void hopeAbandonYe2(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
         log.info("Hope Abandon Ye 2: Start, pattern 1");
@@ -413,9 +435,9 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         s.accept(hopeAbandonYe2Purgation2.getModified(Map.of("safe", safe)));
     }
 
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 1", "{safe}");
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2minus1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 2 CCW safe", "Counterclockwise from {safe}");
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2plus3 = ModifiableCallout.durationBasedCall("Hay 3: Purgation 2 CW safe", "Clockwise from {safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1 = new ModifiableCallout<>("HAY 3: Purgation 1", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2minus1 = new ModifiableCallout<>("HAY 3: Purgation 2 CCW safe", "Counterclockwise from {safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2plus3 = new ModifiableCallout<>("Hay 3: Purgation 2 CW safe", "Clockwise from {safe}");
 
     public void hopeAbandonYe3(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
         log.info("Hope Abandon Ye 3: Start, purgation 1");
@@ -505,41 +527,14 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             }
         } while (true);
 
-        Optional<XivCombatant> maybeInner;
-        do {
-            maybeInner = circlesOfHell.stream().filter(cbt -> {
-                long id = cbt.getbNpcId();
-                return id == 15765;
-            }).findFirst();
-            if(maybeInner.isPresent()) {
-                innerCircle = maybeInner.get();
-                break;
-            }
-        } while (true);
+        Optional<XivCombatant> maybeInner = circlesOfHell.stream().filter(cbt -> cbt.getbNpcId() == 15765).findFirst();
+        maybeInner.ifPresent(cbt -> innerCircle = cbt);
 
-        Optional<XivCombatant> maybeMiddle;
-        do {
-            maybeMiddle = circlesOfHell.stream().filter(cbt -> {
-                long id = cbt.getbNpcId();
-                return id == 15766;
-            }).findFirst();
-            if(maybeMiddle.isPresent()) {
-                middleCircle = maybeMiddle.get();
-                break;
-            }
-        } while (true);
+        Optional<XivCombatant> maybeMiddle = circlesOfHell.stream().filter(cbt -> cbt.getbNpcId() == 15766).findFirst();
+        maybeMiddle.ifPresent(cbt -> middleCircle = cbt);
 
-        Optional<XivCombatant> maybeOuter;
-        do {
-            maybeOuter = circlesOfHell.stream().filter(cbt -> {
-                long id = cbt.getbNpcId();
-                return id == 15767;
-            }).findFirst();
-            if(maybeOuter.isPresent()) {
-                outerCircle = maybeOuter.get();
-                break;
-            }
-        } while (true);
+        Optional<XivCombatant> maybeOuter = circlesOfHell.stream().filter(cbt -> cbt.getbNpcId() == 15767).findFirst();
+        maybeOuter.ifPresent(cbt -> outerCircle = cbt);
 
         log.info("refreshHopeAbandonYeActors: Done.");
     }
