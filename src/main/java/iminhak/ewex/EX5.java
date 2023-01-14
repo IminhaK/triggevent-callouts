@@ -316,7 +316,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             aue -> aue.abilityIdMatches(0x7F27),
             this::hopeAbandonYe1,
             this::hopeAbandonYe2,
-            this::hopeAbandonYe3
+            this::hopeAbandonYe3,
+            this::hopeAbandonYe2
             );
 
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe1Purgation1Triangle = new ModifiableCallout<>("HAY 1: Purgation 1 Cone", "{safe1} or {safe2}");
