@@ -213,16 +213,6 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         };
     }
 
-    private static EX5.Ring ringFromMapEffect(MapEffectEvent mee) {
-        int index = (int) mee.getIndex();
-        return switch (index) {
-            case 01 -> Ring.INNER;
-            case 02 -> Ring.MID;
-            case 03 -> Ring.OUTER;
-            default -> Ring.UNKNOWN;
-        };
-    }
-
     private static EX5.Ring ringFromCombatant(XivCombatant cbt) {
         int id = (int) cbt.getbNpcId();
         return switch (id) {
@@ -233,24 +223,25 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         };
     }
 
-    //For use with midRingTranslation
-    private static int indexOffsetFromCombatant(XivCombatant cbt) {
-        ArenaSector facing = ArenaPos.combatantFacing(cbt);
-        return switch(facing) {
-            case NORTH -> 0;
-            case NORTHEAST -> 1;
-            case EAST -> 2;
-            case SOUTHEAST -> 3;
-            case SOUTH -> 4;
-            case SOUTHWEST -> 5;
-            case WEST -> 6;
-            case NORTHWEST -> 7;
-            default -> 0;
-        };
-    }
+    private static ArenaSector translatedSector(ArenaSector midLooking, ArenaSector innerFuseLooking) {
+        ArenaSector relativeToMidLooking = innerFuseLooking;
 
-    private static ArenaSector arenaSectorFromIndex(int index) {
-        return ArenaSector.NORTH.plusEighths(index);
+        relativeToMidLooking = switch(midLooking) { //Do nothing if already north
+            case NORTHEAST -> relativeToMidLooking.plusEighths(-1);
+            case EAST -> relativeToMidLooking.plusEighths(-2);
+            case SOUTHEAST -> relativeToMidLooking.plusEighths(-3);
+            case SOUTH -> relativeToMidLooking.plusEighths(-4);
+            case SOUTHWEST -> relativeToMidLooking.plusEighths(-5);
+            case WEST ->  relativeToMidLooking.plusEighths(-6);
+            case NORTHWEST -> relativeToMidLooking.plusEighths(-7);
+            default -> relativeToMidLooking;
+        };
+
+        return switch(relativeToMidLooking) { //if looking at the sw or se of mid, translate it
+            case SOUTHEAST -> innerFuseLooking.plusEighths(-1);
+            case SOUTHWEST -> innerFuseLooking.plusEighths(1);
+            default -> innerFuseLooking;
+        };
     }
 
     private enum Ring {
@@ -265,13 +256,6 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         COUNTERCLOCKWISE,
         UNKNOWN
     }
-
-    //index 0 is north, going CW
-    //indicates what happens if the fire goes through that direction
-    //E/W impossible
-    //N, NE, E, SE, S, SW, W, NW
-    //-1 makes it move CCW, 1 makes it move CW
-    static final int[] midRingTranslation = {0, 0, 0, 1, 0, -1, 0, 0};
 
     List<XivCombatant> marksOfPurgatory;
     XivCombatant rubicante;
@@ -326,23 +310,12 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             refreshHopeAbandonYeActors(s);
 
             //First pattern is one line, in direction he is facing
-            int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
-            int midRotationIndex = indexOffsetFromCombatant(middleCircle);
-            int innerSpin = rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1;
-            int outerSpin = rotationFromMapEffect(outer.get()) == Rotation.CLOCKWISE ? 1 : -1;
-            int flameDestination = Math.floorMod((midRingTranslation[Math.floorMod(midRotationIndex - innerSpin - rubiFacingIndex, 8)]) + rubiFacingIndex + innerSpin, 8);
-            log.info("Flame 1 Destination: {} {}", flameDestination, arenaSectorFromIndex(flameDestination));
-            //Thanks Sinbad in the ACT discord for this solution
-            //inner == outer: rectangle
-            //inner != outer: triangle
-            if(innerSpin == outerSpin) {
-                s.accept(hopeAbandonYe1Purgation1Square.getModified(Map.of(
-                        "safe", arenaSectorFromIndex(flameDestination).opposite())));
-            } else {
-                s.accept(hopeAbandonYe1Purgation1Triangle.getModified(Map.of(
-                        "safe1", arenaSectorFromIndex(flameDestination).plusEighths(-1),
-                        "safe2", arenaSectorFromIndex(flameDestination).plusEighths(1))));
-            }
+            ArenaSector rubiFacing = ArenaPos.combatantFacing(rubicante);
+            ArenaSector rubiFacingNew = rubiFacing.plusEighths(rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1);
+            ArenaSector midLooking = ArenaPos.combatantFacing(middleCircle);
+            ArenaSector flameDestinationSector = translatedSector(midLooking, rubiFacingNew);
+            log.info("Flame 1 Destination: {}, rubiFacing: {}, rubiFacingNew: {}, innerRotation: {}", flameDestinationSector, rubiFacing, rubiFacingNew, rotationFromMapEffect(inner.get()));
+            //TODO: find consistent answer to if its square/triangle
 
             //Second Ordeal of Purgation
             s.waitMs(1_000);
@@ -350,9 +323,9 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
             refreshHopeAbandonYeActors(s);
             //This pattern is just behind the perpendicular lines, he always faces the line that is most CCW, so just get 5 rotations from his location
-            int flameDestination2 = Math.floorMod(indexOffsetFromCombatant(rubicante) + 5, 8);
-            log.info("Flame 2 Safe spot: {} {}", flameDestination2, arenaSectorFromIndex(flameDestination2));
-            s.accept(hopeAbandonYe1Purgation2.getModified(Map.of("safe", arenaSectorFromIndex(flameDestination2))));
+            ArenaSector flameSectorDestination2 = ArenaPos.combatantFacing(rubicante).plusEighths(5);
+            log.info("Flame 2 Safe spot: {}, rubiFacing: {}", flameSectorDestination2, ArenaPos.combatantFacing(rubicante));
+            s.accept(hopeAbandonYe1Purgation2.getModified(Map.of("safe", flameSectorDestination2)));
 
             //gimmeHopeAbandonYePostMechDebug(s);
         }
@@ -370,17 +343,17 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         refreshHopeAbandonYeActors(s);
 
         //first pattern is gonna be cw safe from the destination of the ccw most line
-        int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
-        int midRotationIndex = indexOffsetFromCombatant(middleCircle);
-        int midSpin = rotationFromMapEffect(middlemapeffect) == Rotation.CLOCKWISE ? 1 : -1;
-        int flameDestination = Math.floorMod(rubiFacingIndex + midRingTranslation[Math.floorMod(midRotationIndex + midSpin - rubiFacingIndex, 8)], 8);
-        int flame1point5Destination = Math.floorMod(rubiFacingIndex + 2 + midRingTranslation[Math.floorMod(midRotationIndex + midSpin - (rubiFacingIndex + 2), 8)], 8);
-        log.info("Flame 1 destination: {} {}", flameDestination, arenaSectorFromIndex(flameDestination));
-        log.info("Flame 1.5 destination: {} {}", flame1point5Destination, arenaSectorFromIndex(flame1point5Destination));
-        if(flame1point5Destination - flameDestination == 1) { //triangles right next to eachother, safe 2 cw from it
-            s.accept(hopeAbandonYe2Purgation1.getModified(Map.of("safe", arenaSectorFromIndex(flameDestination).plusEighths(2))));
+        ArenaSector rubiFacing = ArenaPos.combatantFacing(rubicante);
+        ArenaSector midLooking = ArenaPos.combatantFacing(middleCircle);
+        ArenaSector midLookingNew = midLooking.plusEighths(rotationFromMapEffect(middlemapeffect) == Rotation.CLOCKWISE ? 1 : -1);
+        ArenaSector flameSectorDestination = translatedSector(midLookingNew, rubiFacing);
+        ArenaSector flame1point5SectorDestination = translatedSector(midLookingNew, rubiFacing.plusEighths(2));
+        log.info("Flame 1 destination: {}", flameSectorDestination);
+        log.info("Flame 1.5 destination: {}", flame1point5SectorDestination);
+        if(flameSectorDestination.plusEighths(1) == flame1point5SectorDestination) { //triangles right next to eachother, safe 2 cw from it
+            s.accept(hopeAbandonYe2Purgation1.getModified(Map.of("safe", flameSectorDestination.plusEighths(2))));
         } else { //split, safe between them
-            s.accept(hopeAbandonYe2Purgation1.getModified(Map.of("safe", arenaSectorFromIndex(flameDestination).plusEighths(1))));
+            s.accept(hopeAbandonYe2Purgation1.getModified(Map.of("safe", flameSectorDestination.plusEighths(1))));
         }
 
         //Second ordeal of purgation
@@ -392,32 +365,30 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
         refreshHopeAbandonYeActors(s);
 
-        //second pattern is double squares, leaving one eighth safe, mid rotates TODO: investigate, southwest called when it was northwest, east called correctly
+        //second pattern is double squares, leaving one eighth safe, mid rotates
         List<ArenaSector> safe = new ArrayList<>(ArenaSector.all);
-        int midRotationIndex2 = indexOffsetFromCombatant(middleCircle);
-        int midSpin2 = rotationFromMapEffect(middlemapeffect2) == Rotation.CLOCKWISE ? 1 : -1;
-        int fuse1Index = Math.floorMod(indexOffsetFromCombatant(rubicante) - 2, 8);
-        int fuse1Destination = Math.floorMod(fuse1Index + midRingTranslation[Math.floorMod(midRotationIndex2 + midSpin2 - fuse1Index, 8)], 8);
-        ArenaSector fuse1Sector = arenaSectorFromIndex(fuse1Destination);
-        int fuse2Index = Math.floorMod(indexOffsetFromCombatant(rubicante) + 2, 8);
-        int fuse2Destination = Math.floorMod(fuse2Index + midRingTranslation[Math.floorMod(midRotationIndex2 + midSpin2 - fuse2Index, 8)], 8);
-        ArenaSector fuse2Sector = arenaSectorFromIndex(fuse2Destination);
-        log.info("Hope Abandon Ye 2 DEBUG: midrotatioindex: {}, midspin: {}, fuse1index: {}, fuse2index: {}", midRotationIndex2, midSpin2, fuse1Index, fuse2Index);
-        log.info("Hope Abandon Ye 2: squares are at {} and {}", fuse1Sector, fuse2Sector);
+        ArenaSector midLooking2 = ArenaPos.combatantFacing(middleCircle);
+        ArenaSector midNewLooking = rotationFromMapEffect(middlemapeffect2) == Rotation.CLOCKWISE ? midLooking2.plusEighths(1) : midLooking2.plusEighths(-1);
+        ArenaSector fuse1Looking = ArenaPos.combatantFacing(rubicante).plusEighths(-2);
+        ArenaSector fuse1SectorDestination = translatedSector(midNewLooking, fuse1Looking);
+        ArenaSector fuse2Looking = ArenaPos.combatantFacing(rubicante).plusEighths(2);
+        ArenaSector fuse2SectorDestination = translatedSector(midNewLooking, fuse2Looking);
+        log.info("Hope Abandon Ye 2 DEBUG: midLooking2: {}, midNewLooking: {}, fuse1Looking: {}, fuse2Looking: {}", midLooking2, midNewLooking, fuse1Looking, fuse2Looking);
+        log.info("Hope Abandon Ye 2: squares are at {} and {}", fuse1SectorDestination, fuse2SectorDestination);
 
-        safe.remove(fuse1Sector);
-        safe.remove(fuse1Sector.plusEighths(1));
-        safe.remove(fuse1Sector.plusEighths(-1));
-        safe.remove(fuse2Sector);
-        safe.remove(fuse2Sector.plusEighths(1));
-        safe.remove(fuse2Sector.plusEighths(-1));
+        safe.remove(fuse1SectorDestination);
+        safe.remove(fuse1SectorDestination.plusEighths(1));
+        safe.remove(fuse1SectorDestination.plusEighths(-1));
+        safe.remove(fuse2SectorDestination);
+        safe.remove(fuse2SectorDestination.plusEighths(1));
+        safe.remove(fuse2SectorDestination.plusEighths(-1));
 
         s.accept(hopeAbandonYe2Purgation2.getModified(Map.of("safe", safe)));
     }
 
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 1", "{safe}");
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2minus1 = ModifiableCallout.durationBasedCall("HAY 3: Purgation 2 CCW safe", "Counterclockwise from {safe}");
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2plus3 = ModifiableCallout.durationBasedCall("Hay 3: Purgation 2 CW safe", "Clockwise from {}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2plus3 = ModifiableCallout.durationBasedCall("Hay 3: Purgation 2 CW safe", "Clockwise from {safe}");
 
     public void hopeAbandonYe3(AbilityUsedEvent e1, SequentialTriggerController<BaseEvent> s) {
         log.info("Hope Abandon Ye 3: Start, purgation 1");
@@ -430,13 +401,12 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x80E9));
             refreshHopeAbandonYeActors(s);
 
-            int rubiFacingIndex = indexOffsetFromCombatant(rubicante);
-            int midRotationIndex = indexOffsetFromCombatant(middleCircle);
-            int innerSpin = rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1;
-            int middleSpin = rotationFromMapEffect(middle.get()) == Rotation.CLOCKWISE ? 1 : -1;
-            int flameDestination = Math.floorMod(rubiFacingIndex + innerSpin + midRingTranslation[Math.floorMod(midRotationIndex + middleSpin - rubiFacingIndex - innerSpin, 8)], 8);
-            ArenaSector coneSector = arenaSectorFromIndex(flameDestination);
-            s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", coneSector.plusEighths(2))));
+            ArenaSector rubiLooking = ArenaPos.combatantFacing(rubicante);
+            ArenaSector midLooking = ArenaPos.combatantFacing(middleCircle);
+            ArenaSector innerNew = rubiLooking.plusEighths(rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1);
+            ArenaSector middleNew = midLooking.plusEighths(rotationFromMapEffect(middle.get()) == Rotation.CLOCKWISE ? 1 : -1);
+            ArenaSector flameSectorDestination = translatedSector(middleNew, innerNew);
+            s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", flameSectorDestination.plusEighths(2))));
 
             log.info("Hope Abandon Ye 3: Waiting for map effects");
             MapEffectEvent mapEffect = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
@@ -452,15 +422,14 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             // if its -2, call "ccw of [-2]"
             // if its +2, call "cw of [2]"
 
-            int rubiFacingIndex2 = indexOffsetFromCombatant(rubicante);
-            int midRotationIndex2 = indexOffsetFromCombatant(middleCircle);
-            int minus1midTranslation = midRingTranslation[midRotationIndex2 - rubiFacingIndex2 - 1];
-            int plus3midTranslation = midRingTranslation[midRotationIndex2 - rubiFacingIndex2 + 3];
-            ArenaSector rubiFacing = ArenaPos.combatantFacing(rubicante);
-            if(minus1midTranslation == 0) {
-                s.accept(hopeAbandonYe3Purgation2minus1.getModified(Map.of("safe", rubiFacing.plusEighths(-1))));
-            } else if(plus3midTranslation == 0) {
-                s.accept(hopeAbandonYe3Purgation2plus3.getModified(Map.of("safe", rubiFacing.plusEighths(3))));
+            ArenaSector rubiLooking2 = ArenaPos.combatantFacing(rubicante);
+            ArenaSector midLooking2 = ArenaPos.combatantFacing(middleCircle);
+            ArenaSector minus1Sector = rubiLooking2.plusEighths(-1);
+            ArenaSector plus3Sector = rubiLooking2.plusEighths(3);
+            if(translatedSector(midLooking2, minus1Sector) == minus1Sector) { //if (insert into function) and its unchanged
+                s.accept(hopeAbandonYe3Purgation2minus1.getModified(Map.of("safe", rubiLooking2.plusEighths(-1))));
+            } else if(translatedSector(midLooking2, plus3Sector) == plus3Sector) {
+                s.accept(hopeAbandonYe3Purgation2plus3.getModified(Map.of("safe", rubiLooking2.plusEighths(3))));
             }
         }
     }
