@@ -158,7 +158,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     //04 = Flamespire brand indicator
     //04 flags:
     //01000100 = cardinals safe?
-    //20002 = intercards safe?
+    //20002 = intercards safe
     //00080004 = clear indicator
     //Buffs:
     //D9B flare
@@ -174,7 +174,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                 if(!me.isEmpty()) {
                     String safe;
                     log.info("Flamespire Brand: me: {} (0x1000100/16777472 should be card safe)", me.get(0).getFlags());
-                    if(me.get(0).getFlags() != 0x20002) {
+                    if(me.get(0).getFlags() != 0x20002 && me.get(0).getFlags() != 0x2000200) {
                         safe = "cardinals";
                     } else {
                         safe = "intercardinals";
@@ -201,7 +201,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             });
 
     private static boolean ringMapEffect(MapEffectEvent mee) {
-        return mee.getIndex() == 1 || mee.getIndex() == 2 || mee.getIndex() == 3;
+        return (mee.getIndex() == 1 || mee.getIndex() == 2 || mee.getIndex() == 3) && (mee.getFlags() == 0x20001 || mee.getFlags() == 0x200010);
     }
 
     private static EX5.Rotation rotationFromMapEffect(MapEffectEvent mee) {
@@ -255,6 +255,11 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         CLOCKWISE,
         COUNTERCLOCKWISE,
         UNKNOWN
+    }
+
+    private enum Shape {
+        SQUARE,
+        TRIANGLE
     }
 
     List<XivCombatant> marksOfPurgatory;
@@ -315,7 +320,28 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             ArenaSector midLooking = ArenaPos.combatantFacing(middleCircle);
             ArenaSector flameDestinationSector = translatedSector(midLooking, rubiFacingNew);
             log.info("Flame 1 Destination: {}, rubiFacing: {}, rubiFacingNew: {}, innerRotation: {}", flameDestinationSector, rubiFacing, rubiFacingNew, rotationFromMapEffect(inner.get()));
-            //TODO: find consistent answer to if its square/triangle
+
+            //STT
+            //S S
+            //TTS
+            EX5.Rotation outerRotation = rotationFromMapEffect(outer.get());
+            Map<ArenaSector, EX5.Shape> sectorToShape = Map.of(
+                    ArenaSector.NORTH, Shape.TRIANGLE,
+                    ArenaSector.NORTHEAST, Shape.TRIANGLE,
+                    ArenaSector.EAST, Shape.SQUARE,
+                    ArenaSector.SOUTHEAST, Shape.SQUARE,
+                    ArenaSector.SOUTH, Shape.TRIANGLE,
+                    ArenaSector.SOUTHWEST, Shape.TRIANGLE,
+                    ArenaSector.WEST, Shape.SQUARE,
+                    ArenaSector.NORTHWEST, Shape.SQUARE);
+
+            //inverted rotation
+            Shape destinationShape = sectorToShape.get(flameDestinationSector.plusEighths(rotationFromMapEffect(outer.get()) == Rotation.CLOCKWISE ? -1 : 1));
+            if(destinationShape == Shape.TRIANGLE) {
+                s.accept(hopeAbandonYe1Purgation1Triangle.getModified(Map.of("safe1", flameDestinationSector.plusEighths(-1), "safe2", flameDestinationSector.plusEighths(1))));
+            } else {
+                s.accept(hopeAbandonYe1Purgation1Square.getModified(Map.of("safe", flameDestinationSector.opposite())));
+            }
 
             //Second Ordeal of Purgation
             s.waitMs(1_000);
@@ -368,7 +394,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         //second pattern is double squares, leaving one eighth safe, mid rotates
         List<ArenaSector> safe = new ArrayList<>(ArenaSector.all);
         ArenaSector midLooking2 = ArenaPos.combatantFacing(middleCircle);
-        ArenaSector midNewLooking = rotationFromMapEffect(middlemapeffect2) == Rotation.CLOCKWISE ? midLooking2.plusEighths(1) : midLooking2.plusEighths(-1);
+        ArenaSector midNewLooking = midLooking2.plusEighths(rotationFromMapEffect(middlemapeffect2) == Rotation.CLOCKWISE ? 1 : -1);
+        log.info("Hope Abandon Ye 2: mid rot: {}", rotationFromMapEffect(middlemapeffect2));
         ArenaSector fuse1Looking = ArenaPos.combatantFacing(rubicante).plusEighths(-2);
         ArenaSector fuse1SectorDestination = translatedSector(midNewLooking, fuse1Looking);
         ArenaSector fuse2Looking = ArenaPos.combatantFacing(rubicante).plusEighths(2);
@@ -406,7 +433,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             ArenaSector innerNew = rubiLooking.plusEighths(rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1);
             ArenaSector middleNew = midLooking.plusEighths(rotationFromMapEffect(middle.get()) == Rotation.CLOCKWISE ? 1 : -1);
             ArenaSector flameSectorDestination = translatedSector(middleNew, innerNew);
-            s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", flameSectorDestination.plusEighths(2))));
+            s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", flameSectorDestination.plusEighths(1))));
 
             log.info("Hope Abandon Ye 3: Waiting for map effects");
             MapEffectEvent mapEffect = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
