@@ -196,7 +196,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                 if(!me.isEmpty()) {
                     String safe;
                     log.info("Flamespire Brand: me: {}", me.get(0).getFlags());
-                    if(me.get(0).getFlags() != 0x20002 && me.get(0).getFlags() != 0x2000200) {
+                    if(me.get(0).getFlags() != 0x20002 && me.get(0).getFlags() != 0x2000200 && me.get(0).getFlags() != 0x200020) {
                         safe = "cardinals";
                     } else {
                         safe = "intercardinals";
@@ -435,7 +435,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         s.accept(hopeAbandonYe2Purgation2.getModified(Map.of("safe", safe)));
     }
 
-    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1 = new ModifiableCallout<>("HAY 3: Purgation 1", "{safe}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1Triangle = new ModifiableCallout<>("HAY 3: Purgation 1 Triangle", "{safe1} or {safe2}");
+    private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation1Square = new ModifiableCallout<>("HAY 3: Purgation 1 Square", "{safe}");
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2minus1 = new ModifiableCallout<>("HAY 3: Purgation 2 CCW safe", "Counterclockwise from {safe}");
     private final ModifiableCallout<AbilityCastStart> hopeAbandonYe3Purgation2plus3 = new ModifiableCallout<>("Hay 3: Purgation 2 CW safe", "Clockwise from {safe}");
 
@@ -455,7 +456,11 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             ArenaSector innerNew = rubiLooking.plusEighths(rotationFromMapEffect(inner.get()) == Rotation.CLOCKWISE ? 1 : -1);
             ArenaSector middleNew = midLooking.plusEighths(rotationFromMapEffect(middle.get()) == Rotation.CLOCKWISE ? 1 : -1);
             ArenaSector flameSectorDestination = translatedSector(middleNew, innerNew);
-            s.accept(hopeAbandonYe3Purgation1.getModified(Map.of("safe", flameSectorDestination.plusEighths(1))));
+            if(flameSectorDestination.isCardinal()) { //triangles on cardinals
+                s.accept(hopeAbandonYe3Purgation1Triangle.getModified(Map.of("safe1", flameSectorDestination.plusEighths(-1), "safe2", flameSectorDestination.plusEighths(1))));
+            } else { //squares on intercards
+                s.accept(hopeAbandonYe3Purgation1Square.getModified(Map.of("safe", flameSectorDestination.opposite())));
+            }
 
             log.info("Hope Abandon Ye 3: Waiting for map effects");
             MapEffectEvent mapEffect = s.waitEvent(MapEffectEvent.class, EX5::ringMapEffect);
