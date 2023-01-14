@@ -158,7 +158,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     //04 = Flamespire brand indicator
     //04 flags:
     //01000100 = cardinals safe?
-    //200020 = intercards safe?
+    //20002 = intercards safe?
     //00080004 = clear indicator
     //Buffs:
     //D9B flare
@@ -174,7 +174,7 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                 if(!me.isEmpty()) {
                     String safe;
                     log.info("Flamespire Brand: me: {} (0x1000100/16777472 should be card safe)", me.get(0).getFlags());
-                    if(me.get(0).getFlags() == 0x1000100) {
+                    if(me.get(0).getFlags() != 0x20002) {
                         safe = "cardinals";
                     } else {
                         safe = "intercardinals";
