@@ -1,5 +1,7 @@
 # Callout plugin for [Triggevent](https://github.com/xpdota/event-trigger/)
 
+If this is your first time using Triggevent, visit the link above to install that first.
+
 To install, go to Plugin Settings -> Manage Addons -> Add from URL and enter `https://iminhak.github.io/triggevent-callouts/master/INFO`, then Apply and Restart.
 
 For support visit [my discord server](https://discord.gg/nVdhQyk8Uz).
@@ -7,7 +9,6 @@ For support visit [my discord server](https://discord.gg/nVdhQyk8Uz).
 ## Supported Duties
 Endwalker Extremes:
 - Rubicante
-  - Currently not including Ordeal of Purgation (help appreciated!!)
 Omega:
 - O8SP2
 - O10S

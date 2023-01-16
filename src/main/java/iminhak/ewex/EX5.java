@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@CalloutRepo(name = "Rubicante Extreme", duty = KnownDuty.RubicanteEx)
+@CalloutRepo(name = "Iminha's Rubicante Extreme", duty = KnownDuty.RubicanteEx)
 public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(EX5.class);
