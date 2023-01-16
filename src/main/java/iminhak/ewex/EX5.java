@@ -16,6 +16,7 @@ import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTriggerController;
 import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
+import gg.xp.xivsupport.events.triggers.util.RepeatSuppressor;
 import gg.xp.xivsupport.models.ArenaPos;
 import gg.xp.xivsupport.models.ArenaSector;
 import gg.xp.xivsupport.models.XivCombatant;
@@ -42,7 +43,10 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
     private final ModifiableCallout<AbilityCastStart> awayfrom = ModifiableCallout.durationBasedCall("Something", "Away from {clock}");
     private final ModifiableCallout<AbilityCastStart> nextto = ModifiableCallout.durationBasedCall("Something", "Near {clock}");
     private final ModifiableCallout<AbilityCastStart> dualfire = ModifiableCallout.durationBasedCall("Dualfire", "Double buster");
-    private final ModifiableCallout<AbilityCastStart> archInferno = ModifiableCallout.durationBasedCall("Arch Inferno", "Healer stacks");
+    private final ModifiableCallout<AbilityCastStart> archInferno = ModifiableCallout.durationBasedCall("Arch Inferno", "Light parties");
+    private final ModifiableCallout<AbilityCastStart> spikeOfFlame = ModifiableCallout.durationBasedCall("Spike of Flame", "Spread");
+    private final ModifiableCallout<AbilityCastStart> twinfoldFLame = ModifiableCallout.durationBasedCall("Twinfold Flame", "Partners");
+    private final ModifiableCallout<AbilityCastStart> fourfoldFlame = ModifiableCallout.durationBasedCall("Fourfold Flame", "Healer stacks");
     private final ModifiableCallout<HeadMarkerEvent> limitCutNumber = new ModifiableCallout<>("Limit Cut number", "{number}", 20_000);
     private final ModifiableCallout<AbilityCastStart> radialFlagration = ModifiableCallout.durationBasedCall("Radial Flagration", "Proteans");
     private final ModifiableCallout<TetherEvent> ghastlyWind = new ModifiableCallout<>("Ghastly Wind", "Point tether out");
@@ -112,6 +116,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
         getHeadmarkerOffset(event);
     }
 
+    private final RepeatSuppressor repeatSuppressor = new RepeatSuppressor(Duration.ofMillis(200));
+
     //7f6d auto
     //8024 -> used event when he starts ordeal
     //80E9 ordeal of purgation
@@ -131,6 +137,24 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
             case 0x7CFE -> call = radialFlagration;
             case 0x7D20 -> call = sweepingImmolationSpread;
             case 0x7D21 -> call = sweepingImmolationStack;
+            case 0x7D03 -> {
+                if(repeatSuppressor.check(event))
+                    call = fourfoldFlame;
+                else
+                    return;
+            }
+            case 0x7D04 -> {
+                if(repeatSuppressor.check(event))
+                    call = twinfoldFLame;
+                else
+                    return;
+            }
+            case 0x7D02 -> {
+                if(repeatSuppressor.check(event))
+                    call = spikeOfFlame;
+                else
+                    return;
+            }
             default -> {
                 return;
             }
