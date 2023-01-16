@@ -219,8 +219,8 @@ public class EX5 extends AutoChildEventHandler implements FilteredEventHandler {
                 List<MapEffectEvent> me = s.waitEventsUntil(1, MapEffectEvent.class, mee -> mee.getIndex() == 4, AbilityCastStart.class, acs -> acs.abilityIdMatches(0x7D17));
                 if(!me.isEmpty()) {
                     String safe;
-                    log.info("Flamespire Brand: me: {}", me.get(0).getFlags());
-                    if(me.get(0).getFlags() != 0x20002 && me.get(0).getFlags() != 0x2000200 && me.get(0).getFlags() != 0x200020) {
+                    log.info("Flamespire Brand: me: {}", String.format("0x%08X", me.get(0).getFlags()));
+                    if(me.get(0).getFlags() != 0x20002 && me.get(0).getFlags() != 0x2000200 && me.get(0).getFlags() != 0x200020 && me.get(0).getFlags() != 0x800080) {
                         safe = "cardinals";
                     } else {
                         safe = "intercardinals";
