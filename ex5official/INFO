@@ -1,0 +1,8 @@
+{
+    "name": "Iminha's Callouts",
+    "dir_name": "iminhas-callouts",
+    "icon_url": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/2bd5d2b9-a2cb-4347-b2a9-2353e581c80b/dfjly6v-2cdbbb06-1866-41ba-9780-93547535288f.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7InBhdGgiOiJcL2ZcLzJiZDVkMmI5LWEyY2ItNDM0Ny1iMmE5LTIzNTNlNTgxYzgwYlwvZGZqbHk2di0yY2RiYmIwNi0xODY2LTQxYmEtOTc4MC05MzU0NzUzNTI4OGYucG5nIn1dXSwiYXVkIjpbInVybjpzZXJ2aWNlOmZpbGUuZG93bmxvYWQiXX0.UgEEfLlsunz9th7EnOewvo8ePQ_n5rrRW8CjC7ydDU0",
+    "webpage_url": "https://github.com/IminhaK/triggevent-callouts",
+    "url_pattern": "https://iminhak.github.io/triggevent-callouts/master/%s",
+    "description": "Callouts for additional duties not included in base triggevent.\n\n For a full list of supported duties visit:\n\n https://github.com/IminhaK/triggevent-callouts"
+}
