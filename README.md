@@ -7,8 +7,7 @@ To install, go to Plugin Settings -> Manage Addons -> Add from URL and enter `ht
 For support visit [my discord server](https://discord.gg/nVdhQyk8Uz).
 
 ## Supported Duties
-Endwalker Extremes:
-- Rubicante
+
 Omega:
 - O8SP2
 - O10S
