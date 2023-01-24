@@ -1,7 +1,9 @@
 package iminhak.ultimate;
 
+import gg.xp.reevent.events.BaseEvent;
 import gg.xp.reevent.events.EventContext;
 import gg.xp.reevent.scan.AutoChildEventHandler;
+import gg.xp.reevent.scan.AutoFeed;
 import gg.xp.reevent.scan.FilteredEventHandler;
 import gg.xp.reevent.scan.HandleEvents;
 import gg.xp.xivdata.data.duties.KnownDuty;
@@ -9,10 +11,13 @@ import gg.xp.xivsupport.callouts.CalloutRepo;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
 import gg.xp.xivsupport.callouts.OverridesCalloutGroupEnabledSetting;
 import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
+import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
 import gg.xp.xivsupport.events.actlines.events.BuffApplied;
 import gg.xp.xivsupport.events.actlines.events.HeadMarkerEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
+import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
+import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
 import gg.xp.xivsupport.events.triggers.support.NpcCastCallout;
 import gg.xp.xivsupport.events.triggers.support.PlayerHeadmarker;
 import gg.xp.xivsupport.persistence.PersistenceProvider;
@@ -25,10 +30,16 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
     private static final Logger log = LoggerFactory.getLogger(TOPDayZeroAndBleedingEdge.class);
 
     //Phase 1: Omega
-    @NpcCastCallout(0x0)
-    private final ModifiableCallout<AbilityCastStart> programLoop = ModifiableCallout.durationBasedCall("Program Loop", "Check debuff");
-    @PlayerHeadmarker(value = 0, offset = true) //TODO: Program loop headmarker IDs
-    private final ModifiableCallout<HeadMarkerEvent> programLoop1 = new ModifiableCallout<>("Program Loop: 1", "1", 20_000);
+    private final ModifiableCallout<?> firstInLineTower = new ModifiableCallout<>("Loop First: Tower", "One, take tower");
+    private final ModifiableCallout<?> firstInLineTether = new ModifiableCallout<>("Loop First: Tether", "Take tether");
+    private final ModifiableCallout<?> secondInLine = new ModifiableCallout<>("Loop Second", "Two");
+    private final ModifiableCallout<?> secondInLineTower = new ModifiableCallout<>("Loop Second: Tower", "Take tower");
+    private final ModifiableCallout<?> secondInLineTether = new ModifiableCallout<>("Loop Second: Tether", "Take tether");
+    private final ModifiableCallout<?> thirdInLineTower = new ModifiableCallout<>("Loop Third: Tower", "Take tower");
+    private final ModifiableCallout<?> thirdInLineTether = new ModifiableCallout<>("Loop Third: Tether", "Three, Take tether");
+    private final ModifiableCallout<?> fourthInLine = new ModifiableCallout<>("Loop Fourth", "Four");
+    private final ModifiableCallout<?> fourthInLineTower = new ModifiableCallout<>("Loop Fourth: Tower", "Take tower");
+    private final ModifiableCallout<?> fourthInLineTether = new ModifiableCallout<>("Loop Fourth: Tether", "Take tether");
 
     //Debuffs, from Locrian Mode (https://cdn.discordapp.com/attachments/1067362348798574602/1067362349041856553/Preliminary_TOP_status_triggers.xml)
     private final ModifiableCallout<BuffApplied> cascadingLatentDefect = ModifiableCallout.durationBasedCall("Cascading Latent Defect", "Get Rot");
@@ -111,4 +122,72 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
         }
         context.accept(call.getModified(event));
     }
+
+    private static boolean lineDebuff(BuffApplied ba) {
+        int id = (int) ba.getBuff().getId();
+        return id == 0xBBC || id == 0xBBD || id == 0xBBE || id == 0xD7B;
+    }
+
+    private enum NumberInLine {
+        FIRST,
+        SECOND,
+        THIRD,
+        FOURTH,
+        UNKNOWN
+    }
+
+    private static NumberInLine lineFromDebuff(BuffApplied ba) {
+        int id = (int) ba.getBuff().getId();
+        return switch (id) {
+            case 0xBBC -> NumberInLine.FIRST;
+            case 0xBBD -> NumberInLine.SECOND;
+            case 0xBBE -> NumberInLine.THIRD;
+            case 0xD7B -> NumberInLine.FOURTH;
+            default -> NumberInLine.UNKNOWN;
+        };
+    }
+
+    @AutoFeed
+    public SequentialTrigger<BaseEvent> programLoopSq = SqtTemplates.sq(60_000, AbilityCastStart.class,
+            acs -> acs.abilityIdMatches(0x7B03),
+            (e1, s) -> {
+                log.info("Program Loop: Start");
+                BuffApplied lineDebuff = s.waitEvent(BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff);
+                NumberInLine num = lineFromDebuff(lineDebuff);
+                if(num == NumberInLine.FIRST) {
+                    s.accept(firstInLineTower.getModified());
+                } else if(num == NumberInLine.THIRD) {
+                    s.accept(thirdInLineTether.getModified());
+                } else if(num == NumberInLine.SECOND) {
+                    s.accept(secondInLine.getModified());
+                } else if(num == NumberInLine.FOURTH){
+                    s.accept(fourthInLine.getModified());
+                }
+
+                //First tower goes off
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B04));
+                if(num == NumberInLine.SECOND) {
+                    s.accept(secondInLineTower.getModified());
+                } else if(num == NumberInLine.FOURTH) {
+                    s.accept(fourthInLineTether.getModified());
+                }
+
+                //Second tower goes off
+                s.waitMs(100);
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B04));
+                if(num == NumberInLine.THIRD) {
+                    s.accept(thirdInLineTower.getModified());
+                } else if(num == NumberInLine.FIRST) {
+                    s.accept(firstInLineTether.getModified());
+                }
+
+                //Third tower goes off
+                s.waitMs(100);
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B04));
+                if(num == NumberInLine.FOURTH) {
+                    s.accept(fourthInLineTower.getModified());
+                } else if(num == NumberInLine.SECOND) {
+                    s.accept(secondInLineTether.getModified());
+                }
+            });
 }
