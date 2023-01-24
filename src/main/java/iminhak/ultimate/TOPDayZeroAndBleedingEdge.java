@@ -33,7 +33,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-@CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.OMEGA_PROTOCOL)
+@CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.None)
 public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements FilteredEventHandler, OverridesCalloutGroupEnabledSetting {
     private static final Logger log = LoggerFactory.getLogger(TOPDayZeroAndBleedingEdge.class);
 
