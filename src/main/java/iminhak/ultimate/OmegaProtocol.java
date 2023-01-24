@@ -71,10 +71,10 @@ public class OmegaProtocol extends AutoChildEventHandler implements FilteredEven
     };
 
     @AutoFeed
-    private final SequentialTrigger<BaseEvent> circleProgram = SqtTemplates.sq(60_000, AbilityCastStart.class,
+    private final SequentialTrigger<BaseEvent> programLoop = SqtTemplates.sq(60_000, AbilityCastStart.class,
             acs -> acs.abilityIdMatches(0x0), //TODO: Insert correct ID for Circle Program cast
             (e1, s) -> {
-                log.info("Circle Program: start");
+                log.info("Program Loop: start");
                 List<BuffApplied> lineDebuffs = s.waitEvents(8, BuffApplied.class, circleProgramNumber); //TODO: Confirm number of line debuffs applied
                 Optional<BuffApplied> lineDebuffOnPlayer = lineDebuffs.stream().filter(ba -> ba.getTarget().isThePlayer()).findFirst();
                 if(lineDebuffOnPlayer.isPresent()) {
