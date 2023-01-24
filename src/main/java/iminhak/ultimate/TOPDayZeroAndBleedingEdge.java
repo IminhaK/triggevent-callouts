@@ -6,6 +6,7 @@ import gg.xp.reevent.scan.AutoChildEventHandler;
 import gg.xp.reevent.scan.AutoFeed;
 import gg.xp.reevent.scan.FilteredEventHandler;
 import gg.xp.reevent.scan.HandleEvents;
+import gg.xp.xivdata.data.Job;
 import gg.xp.xivdata.data.duties.KnownDuty;
 import gg.xp.xivsupport.callouts.CalloutRepo;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
@@ -13,33 +14,50 @@ import gg.xp.xivsupport.callouts.OverridesCalloutGroupEnabledSetting;
 import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
 import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
 import gg.xp.xivsupport.events.actlines.events.BuffApplied;
-import gg.xp.xivsupport.events.actlines.events.HeadMarkerEvent;
+import gg.xp.xivsupport.events.actlines.events.actorcontrol.DutyRecommenceEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
+import gg.xp.xivsupport.events.triggers.marks.ClearAutoMarkRequest;
+import gg.xp.xivsupport.events.triggers.marks.adv.MarkerSign;
+import gg.xp.xivsupport.events.triggers.marks.adv.SpecificAutoMarkRequest;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
 import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
-import gg.xp.xivsupport.events.triggers.support.NpcCastCallout;
-import gg.xp.xivsupport.events.triggers.support.PlayerHeadmarker;
+import gg.xp.xivsupport.models.XivPlayerCharacter;
 import gg.xp.xivsupport.persistence.PersistenceProvider;
 import gg.xp.xivsupport.persistence.settings.BooleanSetting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.None)
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+@CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.OMEGA_PROTOCOL)
 public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements FilteredEventHandler, OverridesCalloutGroupEnabledSetting {
     private static final Logger log = LoggerFactory.getLogger(TOPDayZeroAndBleedingEdge.class);
 
     //Phase 1: Omega
+    //Program Loop
     private final ModifiableCallout<?> firstInLineTower = new ModifiableCallout<>("Loop First: Tower", "One, take tower");
     private final ModifiableCallout<?> firstInLineTether = new ModifiableCallout<>("Loop First: Tether", "Take tether");
-    private final ModifiableCallout<?> secondInLine = new ModifiableCallout<>("Loop Second", "Two");
+    private final ModifiableCallout<?> secondInLineLoop = new ModifiableCallout<>("Loop Second", "Two");
     private final ModifiableCallout<?> secondInLineTower = new ModifiableCallout<>("Loop Second: Tower", "Take tower");
     private final ModifiableCallout<?> secondInLineTether = new ModifiableCallout<>("Loop Second: Tether", "Take tether");
     private final ModifiableCallout<?> thirdInLineTower = new ModifiableCallout<>("Loop Third: Tower", "Take tower");
     private final ModifiableCallout<?> thirdInLineTether = new ModifiableCallout<>("Loop Third: Tether", "Three, Take tether");
-    private final ModifiableCallout<?> fourthInLine = new ModifiableCallout<>("Loop Fourth", "Four");
+    private final ModifiableCallout<?> fourthInLineLoop = new ModifiableCallout<>("Loop Fourth", "Four");
     private final ModifiableCallout<?> fourthInLineTower = new ModifiableCallout<>("Loop Fourth: Tower", "Take tower");
     private final ModifiableCallout<?> fourthInLineTether = new ModifiableCallout<>("Loop Fourth: Tether", "Take tether");
+    //Pantokrator
+    private final ModifiableCallout<?> firstInLinePanto = new ModifiableCallout<>("Panto First", "One");
+    private final ModifiableCallout<?> firstInLineOut = new ModifiableCallout<>("Panto First: Out", "Move out");
+    private final ModifiableCallout<?> secondInLinePanto = new ModifiableCallout<>("Panto Second", "Two");
+    private final ModifiableCallout<?> secondInLineOut = new ModifiableCallout<>("Panto Second: Out", "Move out");
+    private final ModifiableCallout<?> thirdInLinePanto = new ModifiableCallout<>("Panto Third", "Three");
+    private final ModifiableCallout<?> thirdInLineOut = new ModifiableCallout<>("Panto Third: Out", "Move out");
+    private final ModifiableCallout<?> fourthInLinePanto = new ModifiableCallout<>("Panto Fourth", "Four");
+    private final ModifiableCallout<?> fourthInLineOut = new ModifiableCallout<>("Panto Fourth: Out", "Move out");
 
     //Debuffs, from Locrian Mode (https://cdn.discordapp.com/attachments/1067362348798574602/1067362349041856553/Preliminary_TOP_status_triggers.xml)
     private final ModifiableCallout<BuffApplied> cascadingLatentDefect = ModifiableCallout.durationBasedCall("Cascading Latent Defect", "Get Rot");
@@ -66,11 +84,16 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
         this.state = state;
         this.buffs = buffs;
         this.enabled = new BooleanSetting(pers, "triggers.top.triggers.enabled", false);
+        this.useAutomarks = new BooleanSetting(pers, "triggers.top.use-auto-markers", false);
+        this.usePantokrator = new BooleanSetting(pers, "triggers.top.use-something", false);
     }
 
     private final XivState state;
     private final StatusEffectRepository buffs;
     private final BooleanSetting enabled;
+    private boolean autoMarking = false;
+    private final BooleanSetting useAutomarks;
+    private final BooleanSetting usePantokrator;
 
     private XivState getState() {
         return this.state;
@@ -82,7 +105,8 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
 
     @Override
     public boolean enabled(EventContext context) {
-        return enabled.get();
+        return true;
+//        return enabled.get();
     }
 
     @Override
@@ -91,37 +115,44 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
     }
 
     @HandleEvents
-    public void buffApplied(EventContext context, BuffApplied event) {
-        int id = (int) event.getBuff().getId();
-        final ModifiableCallout<BuffApplied> call;
-        if(!event.getTarget().isThePlayer())
-            return;
-        switch (id) {
-            case 0xDC8 -> call = cascadingLatentDefect;
-            case 0xDB3, 0xDB4, 0xDB5, 0xDB6 -> call = waveCannonKyrios;
-            case 0xDC5 -> call = criticalOverflowBug;
-            case 0xDC4 -> call = criticalSynchronizationBug;
-            case 0xDC6 -> call = criticalUnderflowBug;
-            case 0xD60, 0xDA7, 0xDA8, 0xDA9 -> call = guidedMissileKyrios;
-            case 0xD62 -> call = highPoweredSniperCannon;
-            case 0xDC7 -> call = latentDefect;
-            case 0xD6A -> call = latentSynchronizationBug;
-            case 0xD70, 0xDAF -> call = localCodeSmell;
-            case 0xDC9 -> call = localRegression;
-            case 0xD6D -> call = overflowCodeSmell;
-            case 0xDAC -> call = packetFilterF;
-            case 0xDAB -> call = packetFilterM;
-            case 0xD71, 0xDB0 -> call = remoteCodeSmell;
-            case 0xDCA -> call = remoteRegression;
-            case 0xD61 -> call = sniperCannon;
-            case 0xD6C -> call = synchronizationCodeSmell;
-            case 0xD6E -> call = underflowCodeSmell;
-            default -> {
-                return;
-            }
+    public void reset(EventContext conext, DutyRecommenceEvent event) {
+        if(autoMarking) {
+            conext.accept(new ClearAutoMarkRequest());
         }
-        context.accept(call.getModified(event));
     }
+
+//    @HandleEvents
+//    public void buffApplied(EventContext context, BuffApplied event) {
+//        int id = (int) event.getBuff().getId();
+//        final ModifiableCallout<BuffApplied> call;
+//        if(!event.getTarget().isThePlayer())
+//            return;
+//        switch (id) {
+//            case 0xDC8 -> call = cascadingLatentDefect;
+//            case 0xDB3, 0xDB4, 0xDB5, 0xDB6 -> call = waveCannonKyrios;
+//            case 0xDC5 -> call = criticalOverflowBug;
+//            case 0xDC4 -> call = criticalSynchronizationBug;
+//            case 0xDC6 -> call = criticalUnderflowBug;
+//            case 0xD60, 0xDA7, 0xDA8, 0xDA9 -> call = guidedMissileKyrios;
+//            case 0xD62 -> call = highPoweredSniperCannon;
+//            case 0xDC7 -> call = latentDefect;
+//            case 0xD6A -> call = latentSynchronizationBug;
+//            case 0xD70, 0xDAF -> call = localCodeSmell;
+//            case 0xDC9 -> call = localRegression;
+//            case 0xD6D -> call = overflowCodeSmell;
+//            case 0xDAC -> call = packetFilterF;
+//            case 0xDAB -> call = packetFilterM;
+//            case 0xD71, 0xDB0 -> call = remoteCodeSmell;
+//            case 0xDCA -> call = remoteRegression;
+//            case 0xD61 -> call = sniperCannon;
+//            case 0xD6C -> call = synchronizationCodeSmell;
+//            case 0xD6E -> call = underflowCodeSmell;
+//            default -> {
+//                return;
+//            }
+//        }
+//        context.accept(call.getModified(event));
+//    }
 
     private static boolean lineDebuff(BuffApplied ba) {
         int id = (int) ba.getBuff().getId();
@@ -138,6 +169,7 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
 
     private static NumberInLine lineFromDebuff(BuffApplied ba) {
         int id = (int) ba.getBuff().getId();
+        log.info("NumberInLine: Buff id is {}", id);
         return switch (id) {
             case 0xBBC -> NumberInLine.FIRST;
             case 0xBBD -> NumberInLine.SECOND;
@@ -147,21 +179,67 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
         };
     }
 
+    //returns first player with line debuff
+    private XivPlayerCharacter supPlayerFromLine(NumberInLine il) {
+        List<XivPlayerCharacter> players = getState().getPartyList().stream().filter(p -> p.getJob().isTank() || p.getJob().isHealer()).toList();
+        int lineId = switch(il) {
+            case FIRST -> 0xBBC;
+            case SECOND -> 0xBBD;
+            case THIRD -> 0xBBE;
+            case FOURTH -> 0xD7B;
+            default -> 0x0;
+        };
+
+        XivPlayerCharacter match = null;
+        for(XivPlayerCharacter p : players) {
+            List<BuffApplied> buffs = getBuffs().statusesOnTarget(p);
+            if (buffs.stream().anyMatch(b -> b.buffIdMatches(lineId))) {
+                match = p;
+                break;
+            }
+        }
+
+        return match;
+    }
+
+    //returns first player with line debuff
+    private XivPlayerCharacter dpsPlayerFromLine(NumberInLine il) {
+        List<XivPlayerCharacter> players = getState().getPartyList().stream().filter(p -> p.getJob().isDps()).toList();
+        int lineId = switch(il) {
+            case FIRST -> 0xBBC;
+            case SECOND -> 0xBBD;
+            case THIRD -> 0xBBE;
+            case FOURTH -> 0xD7B;
+            default -> 0x0;
+        };
+
+        XivPlayerCharacter match = null;
+        for(XivPlayerCharacter p : players) {
+            List<BuffApplied> buffs = getBuffs().statusesOnTarget(p);
+            if (buffs.stream().anyMatch(b -> b.buffIdMatches(lineId))) {
+                match = p;
+                break;
+            }
+        }
+
+        return match;
+    }
+
     @AutoFeed
-    public SequentialTrigger<BaseEvent> programLoopSq = SqtTemplates.sq(60_000, AbilityCastStart.class,
+    public SequentialTrigger<BaseEvent> programLoopSq = SqtTemplates.sq(50_000, AbilityCastStart.class,
             acs -> acs.abilityIdMatches(0x7B03),
             (e1, s) -> {
                 log.info("Program Loop: Start");
-                BuffApplied lineDebuff = s.waitEvent(BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff);
+                BuffApplied lineDebuff = s.waitEvent(BuffApplied.class, ba -> lineDebuff(ba) && ba.getTarget().isThePlayer());
                 NumberInLine num = lineFromDebuff(lineDebuff);
                 if(num == NumberInLine.FIRST) {
                     s.accept(firstInLineTower.getModified());
                 } else if(num == NumberInLine.THIRD) {
                     s.accept(thirdInLineTether.getModified());
                 } else if(num == NumberInLine.SECOND) {
-                    s.accept(secondInLine.getModified());
+                    s.accept(secondInLineLoop.getModified());
                 } else if(num == NumberInLine.FOURTH){
-                    s.accept(fourthInLine.getModified());
+                    s.accept(fourthInLineLoop.getModified());
                 }
 
                 //First tower goes off
@@ -190,4 +268,53 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
                     s.accept(secondInLineTether.getModified());
                 }
             });
+
+    @AutoFeed
+    public SequentialTrigger<BaseEvent> pantokratorSq = SqtTemplates.sq(50_000, AbilityCastStart.class,
+            acs -> acs.abilityIdMatches(0x7B0B),
+            (e1, s) -> {
+                if(getUseAutomarks().get() && getUsePantokrator().get()) {
+                    autoMarking = true;
+                    List<BuffApplied> buffs = s.waitEventsQuickSuccession(8, BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff, Duration.ofMillis(200));
+                    List<NumberInLine> supBuffs = buffs.stream().filter(ba -> {
+                        Job j = ((XivPlayerCharacter) ba.getTarget()).getJob();
+                        return j.isTank() || j.isHealer();
+                    }).map(TOPDayZeroAndBleedingEdge::lineFromDebuff).toList();
+                    List<NumberInLine> dpsBuffs = buffs.stream().filter(ba -> {
+                        Job j = ((XivPlayerCharacter) ba.getTarget()).getJob();
+                        return j.isDps();
+                    }).map(TOPDayZeroAndBleedingEdge::lineFromDebuff).toList();
+
+                    supBuffs = new ArrayList<>(supBuffs);
+                    dpsBuffs = new ArrayList<>(dpsBuffs);
+
+                    supBuffs.sort(Comparator.naturalOrder());
+                    dpsBuffs.sort(Comparator.naturalOrder());
+                    NumberInLine priorSup = null;
+                    for (NumberInLine n : supBuffs) {
+                        if (priorSup == n) {
+                            s.accept(new SpecificAutoMarkRequest(supPlayerFromLine(n), MarkerSign.BIND2));
+                            break;
+                        }
+                        priorSup = n;
+                    }
+
+                    NumberInLine priorDps = null;
+                    for (NumberInLine n : dpsBuffs) {
+                        if (priorDps == n) {
+                            s.accept(new SpecificAutoMarkRequest(dpsPlayerFromLine(n), MarkerSign.BIND1));
+                            break;
+                        }
+                        priorDps = n;
+                    }
+                }
+            });
+
+    public BooleanSetting getUseAutomarks() {
+        return useAutomarks;
+    }
+
+    public BooleanSetting getUsePantokrator() {
+        return usePantokrator;
+    }
 }
