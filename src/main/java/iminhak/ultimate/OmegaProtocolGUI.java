@@ -44,7 +44,7 @@ public class OmegaProtocolGUI implements DutyPluginTab {
         innerPantokrator.setLayout(new GridBagLayout());
         JCheckBox usePantokrator = new BooleanSettingGui(omegaProtocol.getUsePantokrator(), "Use Pantokrator").getComponent();
         ReadOnlyText text = new ReadOnlyText("""
-                Pantokrator - If a support and dps need to swap sides, they will be marked with Bind 1 and Bind 2
+                Pantokrator - If a support and dps need to swap sides, they will be marked with Bind 1 and Bind 2. Based on role groups strat.
                 """);
 
         inner.add(usePantokrator, c);

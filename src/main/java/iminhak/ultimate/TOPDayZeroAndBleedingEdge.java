@@ -14,6 +14,7 @@ import gg.xp.xivsupport.callouts.OverridesCalloutGroupEnabledSetting;
 import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
 import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
 import gg.xp.xivsupport.events.actlines.events.BuffApplied;
+import gg.xp.xivsupport.events.actlines.events.HeadMarkerEvent;
 import gg.xp.xivsupport.events.actlines.events.actorcontrol.DutyRecommenceEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
@@ -50,14 +51,18 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
     private final ModifiableCallout<?> fourthInLineTower = new ModifiableCallout<>("Loop Fourth: Tower", "Take tower");
     private final ModifiableCallout<?> fourthInLineTether = new ModifiableCallout<>("Loop Fourth: Tether", "Take tether");
     //Pantokrator
-    private final ModifiableCallout<?> firstInLinePanto = new ModifiableCallout<>("Panto First", "One");
-    private final ModifiableCallout<?> firstInLineOut = new ModifiableCallout<>("Panto First: Out", "Move out");
-    private final ModifiableCallout<?> secondInLinePanto = new ModifiableCallout<>("Panto Second", "Two");
+    private final ModifiableCallout<?> firstInLineOut = new ModifiableCallout<>("Panto First: Out", "One, Move out");
+    private final ModifiableCallout<?> firstInLineStack = new ModifiableCallout<>("Panto First: Stack", "Stack");
+    private final ModifiableCallout<?> secondInLinePanto = new ModifiableCallout<>("Panto Second", "Two, start stacked");
     private final ModifiableCallout<?> secondInLineOut = new ModifiableCallout<>("Panto Second: Out", "Move out");
-    private final ModifiableCallout<?> thirdInLinePanto = new ModifiableCallout<>("Panto Third", "Three");
+    private final ModifiableCallout<?> secondInLineStack = new ModifiableCallout<>("Panto Second: Stack", "Stack");
+    private final ModifiableCallout<?> thirdInLinePanto = new ModifiableCallout<>("Panto Third", "Three, start stacked");
     private final ModifiableCallout<?> thirdInLineOut = new ModifiableCallout<>("Panto Third: Out", "Move out");
-    private final ModifiableCallout<?> fourthInLinePanto = new ModifiableCallout<>("Panto Fourth", "Four");
+    private final ModifiableCallout<?> thirdInLineStack = new ModifiableCallout<>("Panto Third: Stack", "Stack");
+    private final ModifiableCallout<?> fourthInLinePanto = new ModifiableCallout<>("Panto Fourth", "Four, start stacked");
     private final ModifiableCallout<?> fourthInLineOut = new ModifiableCallout<>("Panto Fourth: Out", "Move out");
+    private final ModifiableCallout<?> pantoLasers = new ModifiableCallout<>("Pantokrator: Lasers", "Laser baits");
+    private final ModifiableCallout<?> pantoLaserYou = new ModifiableCallout<>("Pantokrator: Laser you", "Laser on YOU");
 
     //Debuffs, from Locrian Mode (https://cdn.discordapp.com/attachments/1067362348798574602/1067362349041856553/Preliminary_TOP_status_triggers.xml)
     private final ModifiableCallout<BuffApplied> cascadingLatentDefect = ModifiableCallout.durationBasedCall("Cascading Latent Defect", "Get Rot");
@@ -269,8 +274,9 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
                 }
             });
 
+    //AM
     @AutoFeed
-    public SequentialTrigger<BaseEvent> pantokratorSq = SqtTemplates.sq(50_000, AbilityCastStart.class,
+    public SequentialTrigger<BaseEvent> pantokratorAm = SqtTemplates.sq(50_000, AbilityCastStart.class,
             acs -> acs.abilityIdMatches(0x7B0B),
             (e1, s) -> {
                 if(getUseAutomarks().get() && getUsePantokrator().get()) {
@@ -308,6 +314,59 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
                         priorDps = n;
                     }
                 }
+            });
+
+    @AutoFeed
+    public SequentialTrigger<BaseEvent> pantokratorSq = SqtTemplates.sq(50_000, AbilityCastStart.class,
+            acs -> acs.abilityIdMatches(0x7B0B),
+            (e1, s) -> {
+                log.info("Pantokrator: Start");
+                BuffApplied lineDebuff = s.waitEvent(BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff);
+                NumberInLine num = lineFromDebuff(lineDebuff);
+
+                if(num == NumberInLine.FIRST) {
+                    s.accept(firstInLineOut.getModified());
+                } else if(num == NumberInLine.SECOND) {
+                    s.accept(secondInLinePanto.getModified());
+                } else if(num == NumberInLine.THIRD) {
+                    s.accept(thirdInLinePanto.getModified());
+                } else if(num == NumberInLine.FOURTH) {
+                    s.accept(fourthInLinePanto.getModified());
+                }
+
+                //First laser
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B0F));
+                if(num == NumberInLine.SECOND) {
+                    s.accept(secondInLineOut.getModified());
+                } else if (num == NumberInLine.FIRST) {
+                    s.accept(firstInLineStack.getModified());
+                }
+
+                //Second laser
+                s.waitMs(100);
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B0F));
+                if(num == NumberInLine.THIRD) {
+                    s.accept(thirdInLineOut.getModified());
+                } else if(num == NumberInLine.SECOND) {
+                    s.accept(secondInLineStack.getModified());
+                }
+
+                //Third laser
+                s.waitMs(100);
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B0F));
+                if(num == NumberInLine.FOURTH) {
+                    s.accept(fourthInLineOut.getModified());
+                } else if(num == NumberInLine.THIRD) {
+                    s.accept(thirdInLineStack.getModified());
+                }
+
+                //Fourth laser
+                s.waitMs(100);
+                s.waitEvent(AbilityUsedEvent.class, aue -> aue.abilityIdMatches(0x7B0F));
+                s.accept(pantoLasers.getModified());
+
+                s.waitEvent(HeadMarkerEvent.class, hm -> hm.getMarkerId() == 0x84 && hm.getTarget().isThePlayer());
+                s.accept(pantoLaserYou.getModified());
             });
 
     public BooleanSetting getUseAutomarks() {
