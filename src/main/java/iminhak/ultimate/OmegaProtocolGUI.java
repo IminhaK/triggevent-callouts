@@ -44,13 +44,21 @@ public class OmegaProtocolGUI implements DutyPluginTab {
         innerPantokrator.setLayout(new GridBagLayout());
         JCheckBox usePantokrator = new BooleanSettingGui(omegaProtocol.getUsePantokrator(), "Use Pantokrator").getComponent();
         ReadOnlyText text = new ReadOnlyText("""
-                Pantokrator - If a support and dps need to swap sides, they will be marked with Bind 1 and Bind 2. Based on role groups strat.
+                Pantokrator - Will mark players Attack 1-4 for group 1 and Shapes (Square, Circle, Triangle, Cross) for group 2;
+                
+                All triggers use the job prio found at the tab below:
                 """);
+        JButton topPrio = new JButton("TOP Priority");
+        topPrio.addActionListener(l -> reg.activateItem(OmegaProtocolPrioGUI.class));
 
         inner.add(usePantokrator, c);
         c.gridy++;
         c.weighty++;
         inner.add(text, c);
+        c.gridy++;
+        c.gridwidth = 1;
+        c.weighty = 1;
+        inner.add(topPrio, c);
 
         omegaProtocol.getUseAutomarks().addAndRunListener(this::checkVis);
         omegaProtocol.getUsePantokrator().addAndRunListener(this::checkSMVis);
@@ -60,7 +68,7 @@ public class OmegaProtocolGUI implements DutyPluginTab {
 
     @Override
     public KnownDuty getDuty() {
-        return KnownDuty.None;
+        return KnownDuty.OmegaProtocol;
     }
 
     private void checkVis() {

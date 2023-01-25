@@ -23,16 +23,16 @@ import gg.xp.xivsupport.events.triggers.marks.adv.MarkerSign;
 import gg.xp.xivsupport.events.triggers.marks.adv.SpecificAutoMarkRequest;
 import gg.xp.xivsupport.events.triggers.seq.SequentialTrigger;
 import gg.xp.xivsupport.events.triggers.seq.SqtTemplates;
+import gg.xp.xivsupport.models.XivCombatant;
 import gg.xp.xivsupport.models.XivPlayerCharacter;
 import gg.xp.xivsupport.persistence.PersistenceProvider;
 import gg.xp.xivsupport.persistence.settings.BooleanSetting;
+import gg.xp.xivsupport.persistence.settings.JobSortSetting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 @CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.None)
 public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements FilteredEventHandler, OverridesCalloutGroupEnabledSetting {
@@ -91,6 +91,7 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
         this.enabled = new BooleanSetting(pers, "triggers.top.triggers.enabled", false);
         this.useAutomarks = new BooleanSetting(pers, "triggers.top.use-auto-markers", false);
         this.usePantokrator = new BooleanSetting(pers, "triggers.top.use-something", false);
+        sortSetting = new JobSortSetting(pers, "triggers.top.job-prio", state);
     }
 
     private final XivState state;
@@ -99,6 +100,7 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
     private boolean autoMarking = false;
     private final BooleanSetting useAutomarks;
     private final BooleanSetting usePantokrator;
+    private final JobSortSetting sortSetting;
 
     private XivState getState() {
         return this.state;
@@ -275,43 +277,88 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
             });
 
     //AM
+//    @AutoFeed
+//    public SequentialTrigger<BaseEvent> pantokratorAm = SqtTemplates.sq(50_000, AbilityCastStart.class,
+//            acs -> acs.abilityIdMatches(0x7B0B),
+//            (e1, s) -> {
+//                if(getUseAutomarks().get() && getUsePantokrator().get()) {
+//                    autoMarking = true;
+//                    List<BuffApplied> buffs = s.waitEventsQuickSuccession(8, BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff, Duration.ofMillis(200));
+//                    List<NumberInLine> supBuffs = buffs.stream().filter(ba -> {
+//                        Job j = ((XivPlayerCharacter) ba.getTarget()).getJob();
+//                        return j.isTank() || j.isHealer();
+//                    }).map(TOPDayZeroAndBleedingEdge::lineFromDebuff).toList();
+//                    List<NumberInLine> dpsBuffs = buffs.stream().filter(ba -> {
+//                        Job j = ((XivPlayerCharacter) ba.getTarget()).getJob();
+//                        return j.isDps();
+//                    }).map(TOPDayZeroAndBleedingEdge::lineFromDebuff).toList();
+//
+//                    supBuffs = new ArrayList<>(supBuffs);
+//                    dpsBuffs = new ArrayList<>(dpsBuffs);
+//
+//                    supBuffs.sort(Comparator.naturalOrder());
+//                    dpsBuffs.sort(Comparator.naturalOrder());
+//                    NumberInLine priorSup = null;
+//                    for (NumberInLine n : supBuffs) {
+//                        if (priorSup == n) {
+//                            s.accept(new SpecificAutoMarkRequest(supPlayerFromLine(n), MarkerSign.BIND2));
+//                            break;
+//                        }
+//                        priorSup = n;
+//                    }
+//
+//                    NumberInLine priorDps = null;
+//                    for (NumberInLine n : dpsBuffs) {
+//                        if (priorDps == n) {
+//                            s.accept(new SpecificAutoMarkRequest(dpsPlayerFromLine(n), MarkerSign.BIND1));
+//                            break;
+//                        }
+//                        priorDps = n;
+//                    }
+//                }
+//            });
+
     @AutoFeed
     public SequentialTrigger<BaseEvent> pantokratorAm = SqtTemplates.sq(50_000, AbilityCastStart.class,
             acs -> acs.abilityIdMatches(0x7B0B),
             (e1, s) -> {
                 if(getUseAutomarks().get() && getUsePantokrator().get()) {
-                    autoMarking = true;
-                    List<BuffApplied> buffs = s.waitEventsQuickSuccession(8, BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff, Duration.ofMillis(200));
-                    List<NumberInLine> supBuffs = buffs.stream().filter(ba -> {
-                        Job j = ((XivPlayerCharacter) ba.getTarget()).getJob();
-                        return j.isTank() || j.isHealer();
-                    }).map(TOPDayZeroAndBleedingEdge::lineFromDebuff).toList();
-                    List<NumberInLine> dpsBuffs = buffs.stream().filter(ba -> {
-                        Job j = ((XivPlayerCharacter) ba.getTarget()).getJob();
-                        return j.isDps();
-                    }).map(TOPDayZeroAndBleedingEdge::lineFromDebuff).toList();
-
-                    supBuffs = new ArrayList<>(supBuffs);
-                    dpsBuffs = new ArrayList<>(dpsBuffs);
-
-                    supBuffs.sort(Comparator.naturalOrder());
-                    dpsBuffs.sort(Comparator.naturalOrder());
-                    NumberInLine priorSup = null;
-                    for (NumberInLine n : supBuffs) {
-                        if (priorSup == n) {
-                            s.accept(new SpecificAutoMarkRequest(supPlayerFromLine(n), MarkerSign.BIND2));
-                            break;
+                    List<BuffApplied> numbers = s.waitEventsQuickSuccession(8, BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff, Duration.ofMillis(200));
+                    Map<NumberInLine, List<XivPlayerCharacter>> mechanics = new EnumMap<>(NumberInLine.class);
+                    numbers.forEach(ba -> {
+                        if (ba.getTarget() instanceof XivPlayerCharacter p) {
+                            int id = (int) ba.getBuff().getId();
+                            switch (id) {
+                                case 0xBBC -> mechanics.computeIfAbsent(NumberInLine.FIRST, k -> new ArrayList<>()).add(p);
+                                case 0xBBD -> mechanics.computeIfAbsent(NumberInLine.SECOND, k -> new ArrayList<>()).add(p);
+                                case 0xBBE -> mechanics.computeIfAbsent(NumberInLine.THIRD, k -> new ArrayList<>()).add(p);
+                                case 0xD7B -> mechanics.computeIfAbsent(NumberInLine.FOURTH, k -> new ArrayList<>()).add(p);
+                            }
                         }
-                        priorSup = n;
-                    }
+                    });
+                    log.info("PantokratorAm: Mechanics: {}", mechanics);
 
-                    NumberInLine priorDps = null;
-                    for (NumberInLine n : dpsBuffs) {
-                        if (priorDps == n) {
-                            s.accept(new SpecificAutoMarkRequest(dpsPlayerFromLine(n), MarkerSign.BIND1));
-                            break;
-                        }
-                        priorDps = n;
+                    Comparator<XivPlayerCharacter> jobSort = get_sortSetting().getPlayerJailSortComparator();
+                    mechanics.values().forEach(list -> list.sort(jobSort));
+
+                    List<XivPlayerCharacter> ones = mechanics.get(NumberInLine.FIRST);
+                    List<XivPlayerCharacter> twos = mechanics.get(NumberInLine.SECOND);
+                    List<XivPlayerCharacter> threes = mechanics.get(NumberInLine.THIRD);
+                    List<XivPlayerCharacter> fours = mechanics.get(NumberInLine.FOURTH);
+
+                    ///Confirm sizes in case someone was rezzing and missed debuff
+                    //TODO: mark no matter how many ppl
+                    if(ones.size() + twos.size() + threes.size() + fours.size() == 8) {
+                        //g1
+                        s.accept(new SpecificAutoMarkRequest(ones.get(0), MarkerSign.ATTACK_NEXT));
+                        s.accept(new SpecificAutoMarkRequest(twos.get(0), MarkerSign.ATTACK_NEXT));
+                        s.accept(new SpecificAutoMarkRequest(threes.get(0), MarkerSign.ATTACK_NEXT));
+                        s.accept(new SpecificAutoMarkRequest(fours.get(0), MarkerSign.ATTACK_NEXT));
+
+                        s.accept(new SpecificAutoMarkRequest(ones.get(1), MarkerSign.SQUARE));
+                        s.accept(new SpecificAutoMarkRequest(twos.get(1), MarkerSign.CIRCLE));
+                        s.accept(new SpecificAutoMarkRequest(threes.get(1), MarkerSign.TRIANGLE));
+                        s.accept(new SpecificAutoMarkRequest(fours.get(1), MarkerSign.CROSS));
                     }
                 }
             });
@@ -321,7 +368,7 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
             acs -> acs.abilityIdMatches(0x7B0B),
             (e1, s) -> {
                 log.info("Pantokrator: Start");
-                BuffApplied lineDebuff = s.waitEvent(BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff);
+                BuffApplied lineDebuff = s.waitEvent(BuffApplied.class, ba -> lineDebuff(ba) && ba.getTarget().isThePlayer());
                 NumberInLine num = lineFromDebuff(lineDebuff);
 
                 if(num == NumberInLine.FIRST) {
@@ -375,5 +422,9 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
 
     public BooleanSetting getUsePantokrator() {
         return usePantokrator;
+    }
+
+    public JobSortSetting get_sortSetting() {
+        return sortSetting;
     }
 }
