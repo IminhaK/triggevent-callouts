@@ -18,6 +18,7 @@ import gg.xp.xivsupport.events.actlines.events.HeadMarkerEvent;
 import gg.xp.xivsupport.events.actlines.events.actorcontrol.DutyRecommenceEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
+import gg.xp.xivsupport.events.triggers.duties.ewult.OmegaUltimate;
 import gg.xp.xivsupport.events.triggers.marks.ClearAutoMarkRequest;
 import gg.xp.xivsupport.events.triggers.marks.adv.MarkerSign;
 import gg.xp.xivsupport.events.triggers.marks.adv.SpecificAutoMarkRequest;
@@ -85,13 +86,13 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
     private final ModifiableCallout<BuffApplied> synchronizationCodeSmell = ModifiableCallout.durationBasedCall("Synchronization Code Smell", "Stack soon");
     private final ModifiableCallout<BuffApplied> underflowCodeSmell = ModifiableCallout.durationBasedCall("Underflow Code Smell", "Rot soon");
 
-    public TOPDayZeroAndBleedingEdge(XivState state, StatusEffectRepository buffs, PersistenceProvider pers) {
+    public TOPDayZeroAndBleedingEdge(XivState state, StatusEffectRepository buffs, PersistenceProvider pers, OmegaUltimate omUlt) {
         this.state = state;
         this.buffs = buffs;
         this.enabled = new BooleanSetting(pers, "triggers.top.triggers.enabled", false);
         this.useAutomarks = new BooleanSetting(pers, "triggers.top.use-auto-markers", false);
         this.usePantokrator = new BooleanSetting(pers, "triggers.top.use-something", false);
-        sortSetting = new JobSortSetting(pers, "triggers.top.job-prio", state);
+        this.omUlt = omUlt;
     }
 
     private final XivState state;
@@ -100,7 +101,7 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
     private boolean autoMarking = false;
     private final BooleanSetting useAutomarks;
     private final BooleanSetting usePantokrator;
-    private final JobSortSetting sortSetting;
+    private final OmegaUltimate omUlt;
 
     private XivState getState() {
         return this.state;
@@ -108,6 +109,10 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
 
     private StatusEffectRepository getBuffs() {
         return this.buffs;
+    }
+
+    private OmegaUltimate getOmegaUlt() {
+        return this.omUlt;
     }
 
     @Override
@@ -209,14 +214,19 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
         return match;
     }
 
+    static final int FIRST_ID = 0xBBC;
+    static final int SECOND_ID = 0xBBD;
+    static final int THIRD_ID = 0xBBE;
+    static final int FOURTH_ID = 0xD7B;
+
     //returns first player with line debuff
     private XivPlayerCharacter dpsPlayerFromLine(NumberInLine il) {
         List<XivPlayerCharacter> players = getState().getPartyList().stream().filter(p -> p.getJob().isDps()).toList();
         int lineId = switch(il) {
-            case FIRST -> 0xBBC;
-            case SECOND -> 0xBBD;
-            case THIRD -> 0xBBE;
-            case FOURTH -> 0xD7B;
+            case FIRST -> FIRST_ID;
+            case SECOND -> SECOND_ID;
+            case THIRD -> THIRD_ID;
+            case FOURTH -> FOURTH_ID;
             default -> 0x0;
         };
 
@@ -323,42 +333,41 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
             acs -> acs.abilityIdMatches(0x7B0B),
             (e1, s) -> {
                 if(getUseAutomarks().get() && getUsePantokrator().get()) {
-                    List<BuffApplied> numbers = s.waitEventsQuickSuccession(8, BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff, Duration.ofMillis(200));
-                    Map<NumberInLine, List<XivPlayerCharacter>> mechanics = new EnumMap<>(NumberInLine.class);
+                    autoMarking = true;
+                    //Only run if all 8 debuffs present
+                    List<BuffApplied> numbers = s.waitEvents(8, BuffApplied.class, TOPDayZeroAndBleedingEdge::lineDebuff);
+                    List<XivPlayerCharacter> ones = new ArrayList<>();
+                    List<XivPlayerCharacter> twos = new ArrayList<>();
+                    List<XivPlayerCharacter> threes = new ArrayList<>();
+                    List<XivPlayerCharacter> fours = new ArrayList<>();
                     numbers.forEach(ba -> {
                         if (ba.getTarget() instanceof XivPlayerCharacter p) {
                             int id = (int) ba.getBuff().getId();
                             switch (id) {
-                                case 0xBBC -> mechanics.computeIfAbsent(NumberInLine.FIRST, k -> new ArrayList<>()).add(p);
-                                case 0xBBD -> mechanics.computeIfAbsent(NumberInLine.SECOND, k -> new ArrayList<>()).add(p);
-                                case 0xBBE -> mechanics.computeIfAbsent(NumberInLine.THIRD, k -> new ArrayList<>()).add(p);
-                                case 0xD7B -> mechanics.computeIfAbsent(NumberInLine.FOURTH, k -> new ArrayList<>()).add(p);
+                                case FIRST_ID -> ones.add(p);
+                                case SECOND_ID -> twos.add(p);
+                                case THIRD_ID -> threes.add(p);
+                                case FOURTH_ID -> fours.add(p);
                             }
                         }
                     });
-                    log.info("PantokratorAm: Mechanics: {}", mechanics);
 
-                    Comparator<XivPlayerCharacter> jobSort = get_sortSetting().getPlayerJailSortComparator();
-                    mechanics.values().forEach(list -> list.sort(jobSort));
-
-                    List<XivPlayerCharacter> ones = mechanics.get(NumberInLine.FIRST);
-                    List<XivPlayerCharacter> twos = mechanics.get(NumberInLine.SECOND);
-                    List<XivPlayerCharacter> threes = mechanics.get(NumberInLine.THIRD);
-                    List<XivPlayerCharacter> fours = mechanics.get(NumberInLine.FOURTH);
-
-                    ///Confirm sizes in case someone was rezzing and missed debuff
-                    //TODO: mark no matter how many ppl
                     if(ones.size() + twos.size() + threes.size() + fours.size() == 8) {
-                        //g1
-                        s.accept(new SpecificAutoMarkRequest(ones.get(0), MarkerSign.ATTACK_NEXT));
-                        s.accept(new SpecificAutoMarkRequest(twos.get(0), MarkerSign.ATTACK_NEXT));
-                        s.accept(new SpecificAutoMarkRequest(threes.get(0), MarkerSign.ATTACK_NEXT));
-                        s.accept(new SpecificAutoMarkRequest(fours.get(0), MarkerSign.ATTACK_NEXT));
+                        List<XivPlayerCharacter> sortedOnes = getOmegaUlt().sortAccordingToJobPrio(ones.get(0), ones.get(1));
+                        List<XivPlayerCharacter> sortedTwos = getOmegaUlt().sortAccordingToJobPrio(twos.get(0), twos.get(1));
+                        List<XivPlayerCharacter> sortedThrees = getOmegaUlt().sortAccordingToJobPrio(threes.get(0), threes.get(1));
+                        List<XivPlayerCharacter> sortedFours = getOmegaUlt().sortAccordingToJobPrio(fours.get(0), fours.get(1));
 
-                        s.accept(new SpecificAutoMarkRequest(ones.get(1), MarkerSign.SQUARE));
-                        s.accept(new SpecificAutoMarkRequest(twos.get(1), MarkerSign.CIRCLE));
-                        s.accept(new SpecificAutoMarkRequest(threes.get(1), MarkerSign.TRIANGLE));
-                        s.accept(new SpecificAutoMarkRequest(fours.get(1), MarkerSign.CROSS));
+                        //g1
+                        s.accept(new SpecificAutoMarkRequest(sortedOnes.get(0), MarkerSign.ATTACK_NEXT));
+                        s.accept(new SpecificAutoMarkRequest(sortedTwos.get(0), MarkerSign.ATTACK_NEXT));
+                        s.accept(new SpecificAutoMarkRequest(sortedThrees.get(0), MarkerSign.ATTACK_NEXT));
+                        s.accept(new SpecificAutoMarkRequest(sortedFours.get(0), MarkerSign.ATTACK_NEXT));
+
+                        s.accept(new SpecificAutoMarkRequest(sortedOnes.get(1), MarkerSign.SQUARE));
+                        s.accept(new SpecificAutoMarkRequest(sortedTwos.get(1), MarkerSign.CIRCLE));
+                        s.accept(new SpecificAutoMarkRequest(sortedThrees.get(1), MarkerSign.TRIANGLE));
+                        s.accept(new SpecificAutoMarkRequest(sortedFours.get(1), MarkerSign.CROSS));
                     }
                 }
             });
@@ -422,9 +431,5 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
 
     public BooleanSetting getUsePantokrator() {
         return usePantokrator;
-    }
-
-    public JobSortSetting get_sortSetting() {
-        return sortSetting;
     }
 }

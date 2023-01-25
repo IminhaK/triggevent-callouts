@@ -2,6 +2,7 @@ package iminhak.ultimate;
 
 import gg.xp.reevent.scan.ScanMe;
 import gg.xp.xivdata.data.duties.KnownDuty;
+import gg.xp.xivsupport.events.triggers.duties.ewult.OmegaUltimateGroupPrioGui;
 import gg.xp.xivsupport.gui.TitleBorderFullsizePanel;
 import gg.xp.xivsupport.gui.components.ReadOnlyText;
 import gg.xp.xivsupport.gui.extra.DutyPluginTab;
@@ -49,7 +50,7 @@ public class OmegaProtocolGUI implements DutyPluginTab {
                 All triggers use the job prio found at the tab below:
                 """);
         JButton topPrio = new JButton("TOP Priority");
-        topPrio.addActionListener(l -> reg.activateItem(OmegaProtocolPrioGUI.class));
+        topPrio.addActionListener(l -> reg.activateItem(OmegaUltimateGroupPrioGui.class));
 
         inner.add(usePantokrator, c);
         c.gridy++;
