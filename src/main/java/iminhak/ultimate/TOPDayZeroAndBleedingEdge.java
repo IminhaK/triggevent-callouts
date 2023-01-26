@@ -11,10 +11,7 @@ import gg.xp.xivdata.data.duties.KnownDuty;
 import gg.xp.xivsupport.callouts.CalloutRepo;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
 import gg.xp.xivsupport.callouts.OverridesCalloutGroupEnabledSetting;
-import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
-import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
-import gg.xp.xivsupport.events.actlines.events.BuffApplied;
-import gg.xp.xivsupport.events.actlines.events.HeadMarkerEvent;
+import gg.xp.xivsupport.events.actlines.events.*;
 import gg.xp.xivsupport.events.actlines.events.actorcontrol.DutyRecommenceEvent;
 import gg.xp.xivsupport.events.state.XivState;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
@@ -35,7 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.*;
 
-@CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.None)
+@CalloutRepo(name = "Iminha's Day Zero and Bleeding Edge TOP Triggers", duty = KnownDuty.OmegaProtocol)
 public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements FilteredEventHandler, OverridesCalloutGroupEnabledSetting {
     private static final Logger log = LoggerFactory.getLogger(TOPDayZeroAndBleedingEdge.class);
 
@@ -423,6 +420,17 @@ public class TOPDayZeroAndBleedingEdge extends AutoChildEventHandler implements 
 
                 s.waitEvent(HeadMarkerEvent.class, hm -> hm.getMarkerId() == 0x84 && hm.getTarget().isThePlayer());
                 s.accept(pantoLaserYou.getModified());
+            });
+
+    //0x7B26  by 15714:7633 M out
+    //0x7B25 by 15714:7633 M in
+    //0x7B2A by 15715:7634 F in
+    //0x7B2D by 15715:7634 F out
+    @AutoFeed
+    public SequentialTrigger<BaseEvent> partySynergySq = SqtTemplates.sq(60_000, AbilityCastStart.class,
+            acs -> acs.abilityIdMatches(0x7B3F, 0x7B3E),
+            (e1, s) -> {
+                log.info("Party Synergy: Start, waiting for actors");
             });
 
     public BooleanSetting getUseAutomarks() {
