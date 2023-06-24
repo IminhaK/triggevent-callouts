@@ -8,10 +8,14 @@ For support visit [my discord server](https://discord.gg/nVdhQyk8Uz).
 
 ## Supported Duties
 
-Omega:
+### Omega
 - O8SP2
 - O10S
-    - Only up to pre-adds
+  - Only up to pre-adds
 - O11S
 - O12SP1
 - O12SP2
+
+### Pandaemonium
+- P12SP2
+  - Panpan Caloric 1
